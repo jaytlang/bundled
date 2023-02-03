@@ -1,0 +1,7 @@
+etc/imaged.sec
+etc/jaytlang.key
+regress/__pycache__
+*.o
+*.d
+*.core
+*.so
