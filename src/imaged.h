@@ -151,6 +151,20 @@ void		 conn_send(struct conn *, struct netmsg *);
 int		 conn_getfd(struct conn *);
 struct sockaddr	*conn_getsockpeer(struct conn *);
 
+/* msgqueue.c */
+
+struct msgqueue;
+
+struct msgqueue	*msgqueue_new(struct conn *);
+void		 msgqueue_teardown(struct conn *);
+
+int		 msgqueue_append(struct msgqueue *, struct netmsg *);
+void		 msgqueue_pop(struct msgqueue *);
+
+struct netmsg	*msgqueue_gethead(struct msgqueue *);
+void		 msgqueue_getcachedoffset(struct msgqueue *);
+void		 msgqueue_setcachedoffset(struct msgqueue *, size_t);
+
 /* general use */
 __attribute__((unused)) static void
 nothing(int a, int b, struct ipcmsg *c)

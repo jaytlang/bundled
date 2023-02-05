@@ -328,7 +328,7 @@ conn_doreceive(int fd, short event, void *arg)
 static void
 conn_dosend(int fd, short event, void *arg)
 {
-	
+	/* TODO: return here after message'queue' is done */	
 }
 
 
