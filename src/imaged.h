@@ -136,34 +136,34 @@ void		 engine_launch(void);
 
 struct conn;
 
-void		 conn_listen(void (*)(struct conn *));
-void		 conn_teardown(struct conn *);
-void		 conn_teardownall(void);
+void			 conn_listen(void (*)(struct conn *));
+void			 conn_teardown(struct conn *);
+void			 conn_teardownall(void);
 
-void		 conn_receive(struct conn *, void (*)(struct conn *, struct netmsg *));
-void		 conn_stopreceiving(struct conn *);
+void			 conn_receive(struct conn *, void (*)(struct conn *, struct netmsg *));
+void			 conn_stopreceiving(struct conn *);
 
-void		 conn_settimeout(struct conn *, struct timeval *, void (*)(struct conn *));
-void		 conn_canceltimeout(struct conn *);
+void			 conn_settimeout(struct conn *, struct timeval *, void (*)(struct conn *));
+void			 conn_canceltimeout(struct conn *);
 
-void		 conn_send(struct conn *, struct netmsg *);
+void		 	 conn_send(struct conn *, struct netmsg *);
 
-int		 conn_getfd(struct conn *);
-struct sockaddr	*conn_getsockpeer(struct conn *);
+int		 	 conn_getfd(struct conn *);
+struct sockaddr_in	*conn_getsockpeer(struct conn *);
 
 /* msgqueue.c */
 
 struct msgqueue;
 
-struct msgqueue	*msgqueue_new(struct conn *);
-void		 msgqueue_teardown(struct conn *);
+struct msgqueue	*msgqueue_new(struct conn *, void (*)(struct msgqueue *, struct conn *));
+void		 msgqueue_teardown(struct msgqueue *);
 
-int		 msgqueue_append(struct msgqueue *, struct netmsg *);
-void		 msgqueue_pop(struct msgqueue *);
+void		 msgqueue_append(struct msgqueue *, struct netmsg *);
+void		 msgqueue_deletehead(struct msgqueue *);
 
 struct netmsg	*msgqueue_gethead(struct msgqueue *);
-void		 msgqueue_getcachedoffset(struct msgqueue *);
-void		 msgqueue_setcachedoffset(struct msgqueue *, size_t);
+size_t		 msgqueue_getcachedoffset(struct msgqueue *);
+int		 msgqueue_setcachedoffset(struct msgqueue *, size_t);
 
 /* general use */
 __attribute__((unused)) static void

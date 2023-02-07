@@ -20,6 +20,9 @@
 
 #define NETMSG_ERRSTRSIZE	500
 
+#define NETMSG_MAXLABELSIZE	1024
+#define NETMSG_MAXDATASIZE	1048576
+
 /* disk file metadata */
 
 struct msgfile {
@@ -273,7 +276,7 @@ netmsg_getclaimedlabelsize(struct netmsg *m, uint64_t *out)
 
 	offset = sizeof(uint8_t);
 
-	if (m->seekstorage(m->descriptor, offset, SEEK_SET) < 0)
+	if (m->seekstorage(m->descriptor, offset, SEEK_SET) != offset)
 		log_fatal("netmsg_getclaimedlabelsize: could not seek to %lu", offset);
 
 	bytesread = m->readstorage(m->descriptor, out, sizeof(uint64_t));
@@ -286,6 +289,13 @@ netmsg_getclaimedlabelsize(struct netmsg *m, uint64_t *out)
 	}
 
 	*out = be64toh(*out);
+
+	if (*out > NETMSG_MAXLABELSIZE) {
+		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+			"label size %llu exceeds allowed maximum", *out);
+		goto end;
+	}
+
 	status = 0;
 end:
 	return status;
@@ -314,6 +324,13 @@ netmsg_getclaimeddatasize(struct netmsg *m, uint64_t *out)
 	}
 
 	*out = be64toh(*out);
+
+	if (*out > NETMSG_MAXDATASIZE) {
+		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+			"data size %llu exceeds allowed maximum", *out);
+		goto end;
+	}
+
 	status = 0;
 end:
 	return status;
@@ -399,11 +416,21 @@ netmsg_setlabel(struct netmsg *m, char *newlabel)
 	uint64_t	 labelsize, datacopysize = 0;
 	uint64_t	 newlabelsize, benewlabelsize;
 
-	int		 status = 0;
+	int		 status = -1;
 
 	/* if there's already a label here, there also might be
 	 * some data...
 	 */
+
+	newlabelsize = strlen(newlabel);
+
+	if (newlabelsize > NETMSG_MAXLABELSIZE) {
+		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+			"new label size %llu exceeds allowed maximum", newlabelsize);
+		goto end;
+	}
+
+	benewlabelsize = htobe64(newlabelsize);
 
 	if (netmsg_getclaimedlabelsize(m, &labelsize) == 0) {
 		ssize_t	totalsize, offset;
@@ -434,9 +461,6 @@ netmsg_setlabel(struct netmsg *m, char *newlabel)
 	if (m->seekstorage(m->descriptor, 0, SEEK_END) < 0)
 		log_fatal("netmsg_setlabel: failed to seek to end of truncated buffer");
 
-	newlabelsize = strlen(newlabel);
-	benewlabelsize = htobe64(newlabelsize);
-
 	if (m->writestorage(m->descriptor, &benewlabelsize, sizeof(uint64_t))
 		!= sizeof(uint64_t))
 
@@ -454,6 +478,8 @@ netmsg_setlabel(struct netmsg *m, char *newlabel)
 		free(datacopy);
 	}
 
+	status = 0;
+end:
 	return status;
 }
 
@@ -493,6 +519,14 @@ netmsg_setdata(struct netmsg *m, char *newdata, uint64_t datasize)
 	ssize_t		offset;
 	int		status = -1;	
 
+	if (datasize > NETMSG_MAXDATASIZE) {
+		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+			"new data size %llu exceeds allowed maximum", datasize);
+		goto end;
+	}
+
+	bedatasize = htobe64(datasize);
+
 	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) goto end;
 
 	offset = sizeof(uint8_t) + sizeof(uint64_t) + labelsize;
@@ -502,8 +536,6 @@ netmsg_setdata(struct netmsg *m, char *newdata, uint64_t datasize)
 
 	if (m->seekstorage(m->descriptor, 0, SEEK_END) < 0)
 		log_fatal("netmsg_setdata: failed to seek to end of label");
-
-	bedatasize = htobe64(datasize);
 
 	if (m->writestorage(m->descriptor, &bedatasize, sizeof(uint64_t))
 		!= sizeof(uint64_t))
@@ -582,12 +614,18 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 	}
 
 	if (needlabel) {
-		if (netmsg_getclaimedlabelsize(m, &claimedsize) < 0) goto end;
+		if (netmsg_getclaimedlabelsize(m, &claimedsize) < 0) {
+			if (strstr(netmsg_error(m), "exceeds allowed maximum") != NULL)
+				*fatal = 1;
+
+			goto end;
+		}
 
 		copied = netmsg_getlabel(m);
 		if (copied == NULL) goto end;
 
 		copiedsize = strlen(copied);
+		free(copied);
 
 		if (copiedsize != claimedsize) {
 			snprintf(m->errstr, NETMSG_ERRSTRSIZE, "claimed label size %llu != actual label strlen %llu",
@@ -597,10 +635,17 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 	}
 
 	if (needdata) {
-		if (netmsg_getclaimeddatasize(m, &claimedsize) < 0) goto end;
+		if (netmsg_getclaimeddatasize(m, &claimedsize) < 0) {
+			if (strstr(netmsg_error(m), "exceeds allowed maximum") != NULL)
+				*fatal = 1;
+
+			goto end;
+		}
 
 		copied = netmsg_getdata(m, &copiedsize);
 		if (copied == NULL) goto end;
+
+		free(copied);
 
 		if (copiedsize != claimedsize) {
 			strncpy(m->errstr, "claimed data size != actual data size",
