@@ -8,6 +8,7 @@
 #include <sys/tree.h>
 
 #include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include <errno.h>
 #include <event.h>
@@ -15,6 +16,7 @@
 #include <string.h>
 #include <strings.h>
 #include <tls.h>
+#include <unistd.h>
 
 #include "imaged.h"
 
@@ -53,10 +55,10 @@ struct conn {
 
 	struct tls		 *tls_context;
 	struct event		  event_receive;
-	struct event		  event_timeout;
+	struct timeval		  timeout;
 
 	struct netmsg		 *incoming_message;
-	struct netmsg		 *outgoing_message;
+	struct msgqueue		 *outgoing;
 
 	void			(*cb_receive)(struct conn *, struct netmsg *);
 	void			(*cb_timeout)(struct conn *);
@@ -70,13 +72,12 @@ static struct conn		*conn_new(int, struct sockaddr_in *, struct tls *);
 static int			 conn_compare(struct conn *, struct conn *);
 
 static void			 conn_doreceive(int, short, void *);
-static void			 conn_dosend(int, short, void *);
-static void			 conn_catchtimeout(int, short, void *);
+static void			 conn_dosend(struct msgqueue *, struct conn *);
 
 static struct conntree allcons = RB_INITIALIZER(&allcons);
 
-RB_PROTOTYPE_STATIC(conntree, conn, entries, conn_compare);
-RB_GENERATE_STATIC(conntree, conn, entries, conn_compare);
+RB_PROTOTYPE_STATIC(conntree, conn, entries, conn_compare)
+RB_GENERATE_STATIC(conntree, conn, entries, conn_compare)
 
 static void
 globalcontext_init(void)
@@ -88,27 +89,27 @@ globalcontext_init(void)
 	size_t			 keysize;
 
 	globalcfg = tls_config_new();
-	if (out == NULL)
+	if (globalcfg == NULL)
 		log_fatalx("globalcontext_init: can't allocate tls globalcfg");
 
-	if (tls_config_set_capath(out, CONN_CA_PATH) < 0) {
+	if (tls_config_set_ca_path(globalcfg, CONN_CA_PATH) < 0) {
 		tls_config_free(globalcfg);
 		log_fatalx("globalcontext_init: can't set ca path to " CONN_CA_PATH);
 	}
 
-	if (tls_config_set_cert_file(out, CONN_CERT) < 0) {
+	if (tls_config_set_cert_file(globalcfg, CONN_CERT) < 0) {
 		tls_config_free(globalcfg);
 		log_fatalx("globalcontext_init: can't set cert file to " CONN_CERT);
 	}
 
 	if ((key = tls_load_file(CONN_KEY, &keysize, NULL)) == NULL) {
-		tls_config_free(out);
+		tls_config_free(globalcfg);
 		log_fatalx("globalcontext_init: can't load keyfile " CONN_KEY);
 	}
 
 	if (tls_config_set_key_mem(globalcfg, key, keysize) < 0) {
 		tls_unload_file(key, keysize);
-		tls_config_free(out);
+		tls_config_free(globalcfg);
 		log_fatalx("globalcontext_init: can't set key memory");
 	}
 
@@ -152,13 +153,16 @@ globalcontext_teardown(void)
 }
 
 static void
-globalcontext_listen(void (*cb)(struct conn *));
+globalcontext_listen(void (*cb)(struct conn *))
 {
 	struct sockaddr_in	sa;
-	int			lfd;
+	int			lfd, enable = 1;
 
 	lfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
 	if (lfd < 0) log_fatal("globalcontext_listen: socket");
+
+	if (setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+		log_fatal("globalcontext_listen: enable SO_REUSEADDR");
 
 	bzero(&sa, sizeof(struct sockaddr_in));
 	sa.sin_family = AF_INET;
@@ -171,7 +175,8 @@ globalcontext_listen(void (*cb)(struct conn *));
 	if (listen(lfd, CONN_LISTENBACKLOG) < 0)
 		log_fatal("globalcontext_listen: listen");
 
-	event_set(&globalcontext.listen_event, lfd, EV_READ | EV_PERSIST, cb, NULL);
+	event_set(&globalcontext.listen_event, lfd, EV_READ | EV_PERSIST,
+		globalcontext_accept, (void *)cb);
 
 	if (event_add(&globalcontext.listen_event, NULL) < 0) {
 		bzero(&globalcontext.listen_event, sizeof(struct event));
@@ -184,7 +189,7 @@ globalcontext_listen(void (*cb)(struct conn *));
 static void
 globalcontext_accept(int fd, short event, void *arg)
 {
-	struct sockaddr_in	 *peer;
+	struct sockaddr_in	 peer;
 	struct tls		 *connctx;
 	struct conn		 *newconn;
 
@@ -196,15 +201,15 @@ globalcontext_accept(int fd, short event, void *arg)
 	/* XXX: will this always work? i.e. could we get a RST immediately
 	 * after an incoming SYN that breaks everything and causes an error here
 	 */
-	newfd = accept4(fd, (struct sockaddr *)peer, &addrlen,
+	newfd = accept4(fd, (struct sockaddr *)&peer, &addrlen,
 		SOCK_NONBLOCK | SOCK_CLOEXEC);
-
-	if (tls_accept_socket(globalconfig.tls_serverctx, &connctx, fd) < 0)
-		log_fatalx("tls_accept_socket: %s", tls_error(globalconfig.tls_serverctx);
 
 	if (newfd < 0) log_fatal("globalcontext_accept: accept");
 
-	newconn = conn_new(newfd, peer, connctx);
+	if (tls_accept_socket(globalcontext.tls_serverctx, &connctx, fd) < 0)
+		log_fatalx("tls_accept_socket: %s", tls_error(globalcontext.tls_serverctx));
+
+	newconn = conn_new(newfd, &peer, connctx);
 	cb(newconn);
 
 	(void)event;
@@ -233,6 +238,9 @@ conn_new(int fd, struct sockaddr_in *peer, struct tls *connctx)
 
 	memcpy(&out->peer, peer, sizeof(struct sockaddr_in));
 
+	out->outgoing = msgqueue_new(out, conn_dosend);
+	if (out->outgoing == NULL) log_fatal("conn_new: msgqueue_new");
+
 	RB_INSERT(conntree, &allcons, out);
 	return out;
 }
@@ -256,6 +264,11 @@ conn_doreceive(int fd, short event, void *arg)
 
 	ssize_t		 receivesize = 0;
 	int		 unrecoverable, willteardown;
+
+	if (event & EV_TIMEOUT) {
+		c->cb_timeout(c);
+		return;
+	}
 
 	for (;;) {
 		ssize_t		 thispacketsize;
@@ -322,13 +335,49 @@ conn_doreceive(int fd, short event, void *arg)
 	if (willteardown)
 		conn_teardown(c);
 
-	(void)event;
+	(void)fd;
 }
 
 static void
-conn_dosend(int fd, short event, void *arg)
+conn_dosend(struct msgqueue *mq, struct conn *c)
 {
-	/* TODO: return here after message'queue' is done */	
+	char		*rawmsg;
+	struct netmsg	*sendmsg;	
+	ssize_t		 sendsize, sendoffset, written;
+
+	sendmsg = msgqueue_gethead(mq);
+	if (sendmsg == NULL)
+		log_fatalx("conn_dosend: fired when msgqueue empty somehow");
+
+	sendsize = netmsg_seek(sendmsg, 0, SEEK_END);
+	if (sendsize < 0) log_fatalx("conn_dosend: netmsg_seek to end");
+
+	sendoffset = (ssize_t)msgqueue_getcachedoffset(mq);
+	sendsize -= sendoffset;
+
+	if (netmsg_seek(sendmsg, sendoffset, SEEK_SET) < 0)
+		log_fatalx("conn_dosend: netmsg_seek to cached offset");
+
+	rawmsg = reallocarray(NULL, sendsize, sizeof(char));
+	if (rawmsg == NULL) log_fatal("conn_dosend: reallocarray");
+
+	if (netmsg_read(sendmsg, rawmsg, sendsize) != sendsize)
+		log_fatal("conn_dosend: netmsg_read failed to read %ld bytes", sendsize);
+
+	written = tls_write(c->tls_context, rawmsg, sendsize);
+
+	if (written == -1 || written == 0)
+		conn_teardown(c);
+
+	else if (written == TLS_WANT_POLLIN || written == TLS_WANT_POLLOUT)
+		msgqueue_setcachedoffset(mq, (size_t)sendoffset);
+
+	else if (written < sendsize)
+		msgqueue_setcachedoffset(mq, (size_t)(sendoffset + written));
+
+	else msgqueue_deletehead(mq);
+
+	free(rawmsg);
 }
 
 
@@ -337,7 +386,7 @@ conn_listen(void (*cb)(struct conn *))
 {
 	if (!globalcontext_initialized) globalcontext_init();
 
-	if (globalcontext.listening)
+	if (globalcontext.listen_fd > 0)
 		log_fatalx("conn_listen: tried to listen twice in a row");
 
 	globalcontext_listen(cb);
@@ -347,6 +396,8 @@ void
 conn_teardown(struct conn *c)
 {
 	RB_REMOVE(conntree, &allcons, c);
+
+	msgqueue_teardown(c->outgoing);
 
 	conn_stopreceiving(c);
 	conn_canceltimeout(c);
@@ -374,4 +425,76 @@ conn_teardownall(void)
 }
 
 void
-conn_receive
+conn_receive(struct conn *c, void (*cb)(struct conn *, struct netmsg *))
+{
+	short			 event = EV_READ | EV_PERSIST;
+	struct timeval		*timeout = NULL;
+
+	conn_stopreceiving(c);
+
+	c->cb_receive = cb;
+
+	if (!event_pending(&c->event_receive, EV_READ, NULL)) {
+		if (c->cb_timeout != NULL) {
+			timeout = &c->timeout;
+			event |= EV_TIMEOUT;
+		}
+
+		event_set(&c->event_receive, c->sockfd, event, conn_doreceive, c);
+
+		if (event_add(&c->event_receive, timeout) < 0)
+			log_fatal("conn_receive: event_add");
+	}
+}
+
+void
+conn_stopreceiving(struct conn *c)
+{
+	if (event_pending(&c->event_receive, EV_READ, NULL))
+		if (event_del(&c->event_receive) < 0)
+			log_fatal("conn_stopreceiving: event_del");
+}
+
+void
+conn_settimeout(struct conn *c, struct timeval *timeout, void (*cb)(struct conn *))
+{
+	c->cb_timeout = cb;
+	c->timeout = *timeout;
+
+	if (event_pending(&c->event_receive, EV_READ, NULL))
+		conn_receive(c, c->cb_receive);
+}
+
+void
+conn_canceltimeout(struct conn *c)
+{
+	c->cb_timeout = NULL;
+
+	if (event_pending(&c->event_receive, EV_READ, NULL))
+		conn_receive(c, c->cb_receive);
+}
+
+int
+conn_getfd(struct conn *c)
+{
+	return c->sockfd;
+}
+
+void
+conn_send(struct conn *c, struct netmsg *msg)
+{
+	msgqueue_append(c->outgoing, msg);
+}
+
+struct sockaddr_in *
+conn_getsockpeer(struct conn *c)
+{
+	struct sockaddr_in	*peerout;
+
+	peerout = malloc(sizeof(struct sockaddr_in));
+	if (peerout == NULL) goto end;
+
+	*peerout = c->peer;
+end:
+	return peerout;
+}
