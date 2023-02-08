@@ -174,4 +174,12 @@ nothing(int a, int b, struct ipcmsg *c)
 	(void)c;
 }
 
+/* archive.c */
+
+struct archive;
+
+struct archive	*archive_new(void);
+void		 archive_teardown(void);
+
+
 #endif /* IMAGED_H */
