@@ -110,7 +110,7 @@ ipcmsg_marshal(struct ipcmsg *i, uint16_t *msgsizeout)
 
 	memcpy(p, i->msg, i->msgsize * sizeof(char));
 
-	*msgsizeout = marshalled_msgsize;
+	*msgsizeout = i->msgsize + sizeof(uint32_t) + sizeof(uint16_t);
 end:
 	return buf;
 }
