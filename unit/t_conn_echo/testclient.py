@@ -31,5 +31,4 @@ for _i in range(5):
 	active.append(nc)
 
 print("all done, closing connections")
-
 for conn in active: conn.close()

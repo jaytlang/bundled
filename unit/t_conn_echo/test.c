@@ -80,7 +80,6 @@ conn_echomsg(struct conn *c, struct netmsg *msg)
 
 	free(msglabel);
 	free(msgdata);
-
 }
 
 static void
