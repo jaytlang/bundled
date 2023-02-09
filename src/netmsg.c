@@ -119,7 +119,7 @@ netmsg_new(uint8_t opcode)
 
 	int		 diskmsg = 0;
 	int		 flags = O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC;
-	mode_t		 mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+	mode_t		 mode = S_IRUSR | S_IRGRP;
 
 	switch (opcode) {
 	case NETOP_WRITE:
@@ -187,11 +187,44 @@ end:
 		}
 
 		if (path != NULL) {
-			if (diskmsg) unlink(path);
+			unlink(path);
 			msgfile_releasepath(path);
 		}
 	}
 
+	return out;
+}
+
+struct netmsg *
+netmsg_loadweakly(char *path)
+{
+	struct netmsg	*out = NULL;
+	int		 loadfd;
+	uint8_t		 opcode;
+
+	loadfd = open(path, O_RDONLY);
+	if (loadfd < 0) goto end;
+
+	if (read(loadfd, &opcode, sizeof(uint8_t)) != sizeof(uint8_t))
+		goto end;
+	else if (lseek(loadfd, 0, SEEK_SET) != 0)
+		goto end;
+
+	out = calloc(1, sizeof(struct netmsg));
+	if (out == NULL) goto end;
+
+	out->opcode = opcode;
+	out->descriptor = loadfd;
+
+	/* don't set path -> no unlinking will fire in teardown */
+
+	out->closestorage = close;
+	out->readstorage = read;
+	out->writestorage = write;
+	out->seekstorage = lseek;
+	out->truncatestorage = ftruncate;
+
+end:
 	return out;
 }
 
@@ -455,6 +488,7 @@ netmsg_setlabel(struct netmsg *m, char *newlabel)
 		}
 	}
 
+	log_writex(LOGTYPE_DEBUG, "truncating storage with descriptor %d", m->descriptor);
 	if (m->truncatestorage(m->descriptor, sizeof(uint8_t)) < 0)
 		log_fatal("netmsg_setlabel: failed to truncate buffer down before relabel");
 

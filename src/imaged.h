@@ -16,8 +16,13 @@
 #define MESSAGES	"/messages"
 #endif /* MESSAGES */
 
+#ifndef ARCHIVES
 #define ARCHIVES	"/archives"
+#endif /* ARCHIVES */
+
+#ifndef SIGNATURES
 #define SIGNATURES	"/signatures"
+#endif /* SIGNATURES */
 
 extern char *__progname;
 extern int debug, verbose;
@@ -76,6 +81,8 @@ struct netmsg;
 #define NETOP_MAX	7
 
 struct netmsg	*netmsg_new(uint8_t);
+struct netmsg	*netmsg_loadweakly(char *);
+
 void		 netmsg_teardown(struct netmsg *);
 
 const char	*netmsg_error(struct netmsg *);
@@ -178,8 +185,19 @@ nothing(int a, int b, struct ipcmsg *c)
 
 struct archive;
 
-struct archive	*archive_new(void);
-void		 archive_teardown(void);
+struct archive	*archive_new(uint32_t);
+struct archive	*archive_fromfile(uint32_t, char *);
+struct archive	*archive_fromkey(uint32_t);
 
+void		 archive_teardown(struct archive *);
+
+int		 archive_addfile(struct archive *, char *, char *, size_t);
+int		 archive_hasfile(struct archive *, char *);
+char		*archive_loadfile(struct archive *, char *, size_t *);
+
+int		 archive_setsignature(struct archive *, char *);
+int		 archive_verifysignature(struct archive *, char *);
+
+int		 archive_isvalid(struct archive *, int);
 
 #endif /* IMAGED_H */
