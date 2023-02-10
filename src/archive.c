@@ -10,20 +10,21 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <zlib.h>
 
 #include "imaged.h"
 
-#define ARCHIVE_ERRSTRSIZE	500
+#define ARCHIVE_BLOCKSIZE	1048576
 
 struct archivefile {
 	char			*name;
-	size_t		 	 size;
 	size_t			 offset;
 
 	RB_ENTRY(archivefile)	 entries;
@@ -44,16 +45,30 @@ struct archive {
 	char			*path;
 	int			 weak;
 
-	char		 	 errstr[ARCHIVE_ERRSTRSIZE];
+	char		 	 errstr[ERRSTRSIZE];
 
 	struct archivecache	 cachedfiles;
 	RB_ENTRY(archive)	 entries;
 };
 
 static int	 archive_compare(struct archive *, struct archive *);
-static int	 archive_repopulatecachedfiles(struct archive *);
 static void	 archive_recorderror(struct archive *, const char *, ...);
 static char	*archive_keytopath(uint32_t);
+
+static int	 archive_takecrc32(struct archive *, uint32_t *);
+static int	 archive_writecrc32(struct archive *, uint32_t);
+static int	 archive_writesignature(struct archive *, char *);
+
+static ssize_t	 archive_seektostart(struct archive *);
+static ssize_t	 archive_seekpastsignature(struct archive *);
+static ssize_t	 archive_seektoend(struct archive *);
+static ssize_t	 archive_seektonextfile(struct archive *);
+
+static int	 archive_readfileinfo(struct archive *, uint16_t *, char **, uint32_t *, uint32_t *);
+static int	 archive_appendfileinfo(struct archive *, uint16_t, char *, uint32_t, uint32_t);
+
+static int	 archive_rebuildcache(struct archive *);
+
 
 RB_HEAD(archivetree, archive);
 RB_PROTOTYPE_STATIC(archivetree, archive, entries, archive_compare)
@@ -69,6 +84,11 @@ static struct archivefile *
 archivefile_new(char *name, size_t offset)
 {
 	struct archivefile	*out;
+
+	if (strlen(name) > MAXNAMESIZE) {
+		errno = ENAMETOOLONG;
+		log_fatal("archivefile_new: name length check");
+	}
 
 	out = calloc(1, sizeof(struct archivefile));
 	if (out == NULL) log_fatal("archivefile_new: malloc");
@@ -115,7 +135,7 @@ archive_recorderror(struct archive *a, const char *fmt, ...)
 	va_list	ap;
 
 	va_start(ap, fmt);
-	vsnprintf(a->errstr, ARCHIVE_ERRSTRSIZE, fmt, ap);
+	vsnprintf(a->errstr, ERRSTRSIZE, fmt, ap);
 	va_end(ap);
 }
 
@@ -127,6 +147,189 @@ archive_keytopath(uint32_t key)
 	out = asprintf(&out, "%s/%u.bundle", ARCHIVES, key);
 	return out;
 }
+
+static int
+archive_takecrc32(struct archive *a, uint32_t *checksum)
+{
+	char		*readbuffer;
+	ssize_t		 bytesread;
+
+	int		 status = -1;
+
+	readbuffer = malloc(ARCHIVE_BLOCKSIZE);
+	if (readbuffer == NULL) goto end;
+
+	*checksum = crc32_z(*checksum, NULL, 0);
+
+	if (archive_seekpastsignature(a) < 0) {
+		if (errno != EBADMSG)
+			goto end;
+		else status = 0;
+
+	} else {
+		while ((bytesread = read(a->archivefd, readbuffer, ARCHIVE_BLOCKSIZE)) > 0)
+			*checksum = crc32(*checksum, readbuffer, (uint32_t)bytesread);
+
+		if (bytesread == 0) status = 0;
+	}
+
+end:
+	if (archive_seektoend(a) < 0)
+		status = -1;
+
+	if (readbuffer != NULL) free(readbuffer);
+	return status;
+}
+
+static int
+archive_writecrc32(struct archive *a, uint32_t checksum)
+{
+	uint32_t	bechecksum;
+	int		status = -1;
+
+	if (archive_seektostart(a) != 0) goto end;
+
+	bechecksum = htonl(checksum);
+	if (write(a->archivefd, &bechecksum, sizeof(uint32_t)) != sizeof(uint32_t))
+		goto end;
+
+	status = 0
+end:
+	if (archive_seektoend(a) < 0)
+		status = -1;
+
+	return status;
+}
+
+static int
+archive_writesignature(struct archive *a, char *signature)
+{
+	size_t		signaturelen;
+	uint16_t	shortsignaturelen, besignaturelen;
+	char		zero[MAXSIGSIZE];
+	int		status = -1;
+
+	signaturelen = strlen(signature);
+	if (signaturelen > UINT16_MAX) {
+		errno = EINVAL;
+		goto end;
+	}
+
+	shortsignaturelen = (uint16_t)signaturelen;
+	besignaturelen = htons(shortsignaturelen);
+
+	if (lseek(a->archivefd, sizeof(uint32_t), SEEK_SET) != sizeof(uint32_t))
+		goto end;
+
+	if (write(a->archivefd, besignaturelen, sizeof(uint16_t)) != sizeof(uint16_t))
+		goto end;
+
+	if (write(a->archivefd, signature, signaturelen) != signaturelen)
+		goto end;
+
+	bzero(zero, MAXSIGSIZE * sizeof(char));
+	if (write(a->archivefd, zero, MAXSIGSIZE - signaturelen) < 0)
+		goto end;
+
+	status = 0;
+end:
+	if (archive_seektoend(a) < 0)
+		status = -1;
+
+	return status;
+}
+
+static ssize_t
+archive_seektostart(struct archive *a)
+{
+	return lseek(a->archivefd, 0, SEEK_SET);
+}
+
+static ssize_t
+archive_seekpastsignature(struct archive *a)
+{
+	size_t	offset = sizeof(uint32_t) + sizeof(uint16_t) + MAXSIGSIZE;
+
+	return lseek(a->archivefd, offset, SEEK_SET);
+}
+
+static ssize_t
+archive_seektoend(struct archive *a)
+{
+	return lseek(a->archivefd, 0, SEEK_END);
+}
+
+static ssize_t
+archive_seektonextfile(struct archive *a)
+{
+	ssize_t		status = -1;
+	uint32_t	compressedsize;
+
+	if (archive_readfileinfo(a, NULL, NULL, NULL, &compressedsize) < 0)
+		goto end;
+
+	status = lseek(a->archivefd, (off_t)compressedsize, SEEK_CUR);
+end:
+	return status;
+}
+
+static int
+archive_readfileinfo(struct archive *a, uint16_t *labelsize, char *label,
+	uint32_t *uncompressedsize, uint32_t *compressedsize)
+{
+	char		*labelptr, labelscratch[MAXNAMESIZE];
+	uint32_t	*compressedsizeptr, compressedsizescratch;
+	uint32_t	*uncompressedsizeptr, uncompressedsizescratch;
+	uint16_t	*labelsizeptr, labelsizescratch;
+
+	ssize_t		 initial_offset;
+	int		 status = -1;
+
+	initial_offset = lseek(a->archivefd, 0, SEEK_CUR);
+	if (initial_offset < 0) goto end;
+
+	if (labelsize != NULL) labelsizeptr = labelsize;
+	else labelsizeptr = &labelsizescratch;
+
+	if (label != NULL) labelptr = label;
+	else labelptr = labelscratch;
+
+	if (uncompressedsize != NULL) uncompressedsizeptr = uncompressedsize;
+	else uncompressedsizeptr = &uncompressedsizescratch;
+
+	if (compressedsize != NULL) compressedsizeptr = compressedsize;
+	else compressedsizeptr = &compressedsizescratch;
+
+	if (read(a->archivefd, labelsizeptr, sizeof(uint16_t)) != sizeof(uint16_t))
+		goto end;
+
+	*labelsizeptr = ntohs(*labelsizeptr);
+
+	if (read(a->archivefd, labelptr, *labelsizeptr) != *labelsizeptr))
+		goto end;
+
+	if (read(a->archivefd, uncompressedsizeptr, sizeof(uint32_t)) != sizeof(uint32_t))
+		goto end;
+
+	*uncompressedsizeptr = ntohl(*uncompressedsizeptr);
+
+	if (read(a->archivefd, compressedsizeptr, sizeof(uint32_t)) != sizeof(uint32_t))
+		goto end;
+
+	*compressedsizeptr = ntohl(*compressedsizeptr);
+
+	status = 0;
+end:
+	if (initial_offset > 0)
+		if (lseek(a->archivefd, initial_offset, SEEK_SET) != initial_offset)
+			status = -1;
+
+	return status;
+}
+
+static int
+archive_appendfileinfo(struct archive *a, uint16_t labelsize, char *label,
+	uint32_t uncompressedsize, uint32_t compressedsize);
 
 struct archive *
 archive_new(uint32_t key)

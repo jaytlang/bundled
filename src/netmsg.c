@@ -18,11 +18,6 @@
 
 #include "imaged.h"
 
-#define NETMSG_ERRSTRSIZE	500
-
-#define NETMSG_MAXLABELSIZE	1024
-#define NETMSG_MAXDATASIZE	1048576
-
 /* disk file metadata */
 
 struct msgfile {
@@ -53,7 +48,7 @@ struct netmsg {
 	off_t		(*seekstorage)(int, off_t, int);
 	int		(*truncatestorage)(int, off_t);
 
-	char		  errstr[NETMSG_ERRSTRSIZE];
+	char		  errstr[ERRSTRSIZE];
 };
 
 static int	netmsg_getclaimedlabelsize(struct netmsg *, uint64_t *);
@@ -260,7 +255,7 @@ netmsg_write(struct netmsg *m, void *bytes, size_t count)
 
 	status = m->writestorage(m->descriptor, bytes, count);
 	if (status < 0)
-		strncpy(m->errstr, strerror(errno), NETMSG_ERRSTRSIZE);
+		strncpy(m->errstr, strerror(errno), ERRSTRSIZE);
 
 	return status;
 }
@@ -272,7 +267,7 @@ netmsg_read(struct netmsg *m, void *bytes, size_t count)
 
 	status = m->readstorage(m->descriptor, bytes, count);
 	if (status < 0)
-		strncpy(m->errstr, strerror(errno), NETMSG_ERRSTRSIZE);
+		strncpy(m->errstr, strerror(errno), ERRSTRSIZE);
 
 	return status;
 }
@@ -284,7 +279,7 @@ netmsg_seek(struct netmsg *m, ssize_t offset, int whence)
 
 	status = m->seekstorage(m->descriptor, offset, whence);
 	if (status < 0)
-		strncpy(m->errstr, strerror(errno), NETMSG_ERRSTRSIZE);
+		strncpy(m->errstr, strerror(errno), ERRSTRSIZE);
 
 	return status;
 }
@@ -296,7 +291,7 @@ netmsg_truncate(struct netmsg *m, ssize_t offset)
 
 	status = m->truncatestorage(m->descriptor, offset);
 	if (status < 0)
-		strncpy(m->errstr, strerror(errno), NETMSG_ERRSTRSIZE);
+		strncpy(m->errstr, strerror(errno), ERRSTRSIZE);
 
 	return status;	
 }
@@ -317,15 +312,14 @@ netmsg_getclaimedlabelsize(struct netmsg *m, uint64_t *out)
 	if (bytesread < 0)
 		log_fatal("netmsg_getclaimedlabelsize: could not read buffer");
 	else if (bytesread < (ssize_t)sizeof(uint64_t)) {
-		strncpy(m->errstr, "label size is incompletely received", NETMSG_ERRSTRSIZE);
+		errno = EINPROGRESS;
 		goto end;
 	}
 
 	*out = be64toh(*out);
 
-	if (*out > NETMSG_MAXLABELSIZE) {
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
-			"label size %llu exceeds allowed maximum", *out);
+	if (*out > MAXNAMESIZE) {
+		errno = ERANGE;
 		goto end;
 	}
 
@@ -352,15 +346,14 @@ netmsg_getclaimeddatasize(struct netmsg *m, uint64_t *out)
 	if (bytesread < 0)
 		log_fatal("netmsg_getclaimeddatasize: could not read buffer");
 	else if (bytesread < (ssize_t)sizeof(uint64_t)) {
-		strncpy(m->errstr, "data size is incompletely received", NETMSG_ERRSTRSIZE);
+		errno = EINPROGRESS;
 		goto end;
 	}
 
 	*out = be64toh(*out);
 
-	if (*out > NETMSG_MAXDATASIZE) {
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
-			"data size %llu exceeds allowed maximum", *out);
+	if (*out > MAXFILESIZE) {
+		errno = ERANGE;
 		goto end;
 	}
 
@@ -422,7 +415,11 @@ netmsg_getlabel(struct netmsg *m)
 	uint64_t	 labelsize;
 
 	offset = sizeof(uint8_t) + sizeof(uint64_t);
-	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) goto end;
+	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) {
+		snprintf(m->errstr, ERRSTRSIZE,
+			"netmsg_getlabel: netmsg_getclaimedlabelsize: %s", strerror(errno));
+		goto end;
+	}
 
 	if (m->seekstorage(m->descriptor, offset, SEEK_SET) < 0)
 		log_fatal("netmsg_getlabel: could not seek to %lu", offset);
@@ -457,8 +454,8 @@ netmsg_setlabel(struct netmsg *m, char *newlabel)
 
 	newlabelsize = strlen(newlabel);
 
-	if (newlabelsize > NETMSG_MAXLABELSIZE) {
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+	if (newlabelsize > MAXNAMESIZE) {
+		snprintf(m->errstr, ERRSTRSIZE,
 			"new label size %llu exceeds allowed maximum", newlabelsize);
 		goto end;
 	}
@@ -524,8 +521,16 @@ netmsg_getdata(struct netmsg *m, uint64_t *sizeout)
 	uint64_t	 datasize, labelsize;
 	ssize_t		 bytesread, offset;
 
-	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) goto end;
-	else if (netmsg_getclaimeddatasize(m, &datasize) < 0) goto end;
+	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) {
+		snprintf(m->errstr, ERRSTRSIZE,
+			"netmsg_getdata: netmsg_getclaimedlabelsize: %s", strerror(errno));
+		goto end;
+
+	} else if (netmsg_getclaimeddatasize(m, &datasize) < 0) {
+		snprintf(m->errstr, ERRSTRSIZE,
+			"netmsg_getdata: netmsg_getclaimeddatasize: %s", strerror(errno));
+		goto end;
+	}
 
 	offset = sizeof(uint8_t) + sizeof(uint64_t) + labelsize + sizeof(uint64_t);
 
@@ -553,15 +558,19 @@ netmsg_setdata(struct netmsg *m, char *newdata, uint64_t datasize)
 	ssize_t		offset;
 	int		status = -1;	
 
-	if (datasize > NETMSG_MAXDATASIZE) {
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+	if (datasize > MAXFILESIZE) {
+		snprintf(m->errstr, ERRSTRSIZE,
 			"new data size %llu exceeds allowed maximum", datasize);
 		goto end;
 	}
 
 	bedatasize = htobe64(datasize);
 
-	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) goto end;
+	if (netmsg_getclaimedlabelsize(m, &labelsize) < 0) {
+		snprintf(m->errstr, ERRSTRSIZE,
+			"netmsg_setdata: netmsg_getclaimedlabelsize: %s", strerror(errno));
+		goto end;
+	}
 
 	offset = sizeof(uint8_t) + sizeof(uint64_t) + labelsize;
 
@@ -621,7 +630,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		break;
 
 	default:
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE, "illegal message type %d", m->opcode);
+		snprintf(m->errstr, ERRSTRSIZE, "illegal message type %d", m->opcode);
 		*fatal = 1;
 		goto end;
 	}
@@ -636,11 +645,11 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 
 	else if (actualtypesize != sizeof(uint8_t)) {
 		strncpy(m->errstr, "netmsg_isvalid: complete message type not present",
-			NETMSG_ERRSTRSIZE);
+			ERRSTRSIZE);
 		goto end;
 
 	} else if (actualtype != m->opcode) {
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+		snprintf(m->errstr, ERRSTRSIZE,
 			"cached opcode %u doesn't match marshalled opcode %u",
 			m->opcode, actualtype);
 		*fatal = 1;
@@ -649,9 +658,10 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 
 	if (needlabel) {
 		if (netmsg_getclaimedlabelsize(m, &claimedsize) < 0) {
-			if (strstr(netmsg_error(m), "exceeds allowed maximum") != NULL)
-				*fatal = 1;
+			snprintf(m->errstr, ERRSTRSIZE,
+				"netmsg_isvalid: netmsg_getclaimedlabelsize: %s", strerror(errno));
 
+			if (errno == ERANGE) *fatal = 1;
 			goto end;
 		}
 
@@ -662,7 +672,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		free(copied);
 
 		if (copiedsize != claimedsize) {
-			snprintf(m->errstr, NETMSG_ERRSTRSIZE, "claimed label size %llu != actual label strlen %llu",
+			snprintf(m->errstr, ERRSTRSIZE, "claimed label size %llu != actual label strlen %llu",
 				claimedsize, copiedsize);
 			goto end;
 		}
@@ -670,9 +680,10 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 
 	if (needdata) {
 		if (netmsg_getclaimeddatasize(m, &claimedsize) < 0) {
-			if (strstr(netmsg_error(m), "exceeds allowed maximum") != NULL)
-				*fatal = 1;
+			snprintf(m->errstr, ERRSTRSIZE,
+				"netmsg_isvalid: netmsg_getclaimeddatasize: %s", strerror(errno));
 
+			if (errno == ERANGE) *fatal = 1;
 			goto end;
 		}
 
@@ -683,7 +694,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 
 		if (copiedsize != claimedsize) {
 			strncpy(m->errstr, "claimed data size != actual data size",
-				NETMSG_ERRSTRSIZE);
+				ERRSTRSIZE);
 			goto end;
 		}
 	}
@@ -695,7 +706,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		log_fatal("netmsg_isvalid: seek for actual message size");
 
 	else if (actualmessagesize != calculatedmessagesize) {
-		snprintf(m->errstr, NETMSG_ERRSTRSIZE,
+		snprintf(m->errstr, ERRSTRSIZE,
 			"claimed message size %ld != actual message size %ld",
 			calculatedmessagesize, actualmessagesize);
 

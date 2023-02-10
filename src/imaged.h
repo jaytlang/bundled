@@ -24,6 +24,11 @@
 #define SIGNATURES	"/signatures"
 #endif /* SIGNATURES */
 
+#define	ERRSTRSIZE	500
+#define MAXNAMESIZE	1024
+#define MAXFILESIZE	1048576
+#define MAXSIGSIZE	512
+
 extern char *__progname;
 extern int debug, verbose;
 
