@@ -200,9 +200,10 @@ int		 archive_addfile(struct archive *, char *, char *, size_t);
 int		 archive_hasfile(struct archive *, char *);
 char		*archive_loadfile(struct archive *, char *, size_t *);
 
-int		 archive_setsignature(struct archive *, char *);
-int		 archive_verifysignature(struct archive *, char *);
+uint32_t	 archive_getcrc32(struct archive *);
+char		*archive_getsignature(struct archive *);
+void		 archive_writesignature(struct archive *, char *);
 
-int		 archive_isvalid(struct archive *, int);
+int		 archive_isvalid(struct archive *);
 
 #endif /* IMAGED_H */
