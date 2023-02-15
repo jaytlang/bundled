@@ -63,7 +63,7 @@ static ssize_t	 archive_seekpastsignature(struct archive *);
 static ssize_t	 archive_seektoend(struct archive *);
 static ssize_t	 archive_seektonextfile(struct archive *);
 
-static ssize_t	 archive_readfileinfo(struct archive *, uint16_t *, char *, uint32_t *, uint32_t *);
+static int	 archive_readfileinfo(struct archive *, uint16_t *, char *, uint32_t *, uint32_t *);
 static void	 archive_appendfileinfo(struct archive *, uint16_t, char *, uint32_t, uint32_t);
 
 static void	 archive_rebuildcache(struct archive *);
@@ -225,29 +225,30 @@ archive_seektoend(struct archive *a)
 	return lseek(a->archivefd, 0, SEEK_END);
 }
 
-static ssize_t
+static int
 archive_seektonextfile(struct archive *a)
 {
 	ssize_t		amtread, currentoffset, status = -1;
 	uint32_t	compressedsize;
+	uint16_t	labelsize;
 
 	currentoffset = lseek(a->archivefd, 0, SEEK_CUR);
 	if (currentoffset < 0)
 		log_fatal("archive_seektonextfile: lseek to current position");
 
-	amtread = archive_readfileinfo(a, NULL, NULL, NULL, &compressedsize);
-	if (amtread < 0)
+	if (archive_readfileinfo(a, &labelsize, NULL, NULL, &compressedsize) < 0)
 		status = -1;
+	else {
+		amtread = sizeof(uint16_t) + labelsize + 2 * sizeof(uint32_t);
+		amtread += compressedsize;
 
-	} else {
-		status = lseek(a->archivefd, (off_t)compressedsize, SEEK_CUR);
+		status = lseek(a->archivefd, (off_t)amtread, SEEK_CUR);
 		if (status < 0) log_fatal("archive_seektonextfile: lseek");
 	}
 
 	return status;
 }
 
-/* TOOD: make me ssize_t */
 static int
 archive_readfileinfo(struct archive *a, uint16_t *labelsize, char *label,
 	uint32_t *uncompressedsize, uint32_t *compressedsize)
@@ -751,7 +752,8 @@ archive_isvalid(struct archive *a)
 		goto end;
 	}
 
-	
+	if (archive_seekpastsignature(a) < 0)
+		log_fatal("archive_isvalid: lseek to past signature");
 
 	return status;
 }
