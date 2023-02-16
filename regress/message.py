@@ -3,7 +3,7 @@ from timeout import *
 
 from enum import IntEnum
 
-# these are in frontend.c
+# these are in imaged.h
 class MessageOp(IntEnum):
 	SIGN = 1
 	WRITE = 2
@@ -12,7 +12,6 @@ class MessageOp(IntEnum):
 	ACK = 5
 	ERROR = 6
 
-# f it
 MESSAGE_INCOMPLETE = -69
 
 class MessageField:
@@ -21,14 +20,14 @@ class MessageField:
 
 	@classmethod
 	def from_bytes(cls, bytes):
-		if len(bytes) < 2:
+		if len(bytes) < 8:
 			raise IndexError("not enough bytes for message field length")
 
-		length = int.from_bytes(bytes[0:2], "big")
-		if len(bytes) < 2 + length:
+		length = int.from_bytes(bytes[0:8], "big")
+		if len(bytes) < 8 + length:
 			raise IndexError(f"not enough bytes for message field body")
 
-		return cls(bytes[2:2 + length])
+		return cls(bytes[8:8 + length])
 
 	def content(self): return self._bytes
 
@@ -36,16 +35,16 @@ class MessageField:
 		return self._bytes.decode(encoding="ascii")
 
 	def length(self):
-		return len(self._bytes) + 2
+		return len(self._bytes) + 8
 
 	def to_bytes(self): 
-		length_bytes = len(self._bytes).to_bytes(2, "big")
+		length_bytes = len(self._bytes).to_bytes(8, "big")
 		return length_bytes + self._bytes
 
 class Message:
-	def _check_fname(self):
-		if self._fname is None:
-			e = f"message op {self._opcode} expected fname field, got none"
+	def _check_label(self):
+		if self._label is None:
+			e = f"message op {self._opcode} expected label field, got none"
 			raise ValueError(e)
 
 	def _check_file(self):
@@ -53,12 +52,12 @@ class Message:
 			e = f"message op {self._opcode} expected file field, got none"
 			raise ValueError(e)
 
-	def __init__(self, opcode, fname=None, file=None):
+	def __init__(self, opcode, label=None, file=None):
 		self._opcode = opcode
-		self._fname = None
+		self._label = None
 		self._file = None
 
-		if fname is not None: self._fname = MessageField(fname)
+		if label is not None: self._label = MessageField(label)
 		if file is not None: self._file = MessageField(file)
 
 	@classmethod
@@ -82,33 +81,31 @@ class Message:
 		except ValueError:
 			raise ValueError(f"invalid opcode {opcode} received")
 
-		print(f"from_bytes opcode = {opcode}")
-
 		if opcode in [MessageOp.SIGN, MessageOp.HEARTBEAT, MessageOp.ACK]:
 			return cls(opcode)
 
-		try: fname = MessageField.from_bytes(bytes[1:])
+		try: label = MessageField.from_bytes(bytes[1:])
 		except IndexError: return MESSAGE_INCOMPLETE
 
 		if opcode == MessageOp.ERROR:
-			return cls(opcode, fname=fname.to_ascii())
+			return cls(opcode, label=label.content())
 
 		try:
-			file = MessageField.from_bytes(bytes[1 + fname.length():])
-			return cls(opcode, fname=fname.to_ascii(), file=file)
+			file = MessageField.from_bytes(bytes[1 + label.length():])
+			return cls(opcode, label=label.content(), file=file.content())
 		except IndexError: return MESSAGE_INCOMPLETE
 
 	def to_bytes(self):
 		msg = int(self._opcode).to_bytes(1, "big")
-		if self._fname is not None: msg += self._fname.to_bytes()
+		if self._label is not None: msg += self._label.to_bytes()
 		if self._file is not None: msg += self._file.to_bytes()
 		return msg
 
 	def opcode(self): return self._opcode
 
-	def fname(self):
-		if self._fname is None: return None
-		else: return self._fname.to_ascii()
+	def label(self):
+		if self._label is None: return None
+		else: return self._label.to_ascii()
 
 	def file(self):
 		if self._file is None: return None

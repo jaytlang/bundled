@@ -10,8 +10,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,9 +61,8 @@ static void	 archive_writecrc32(struct archive *, uint32_t);
 static ssize_t	 archive_seektostart(struct archive *);
 static ssize_t	 archive_seekpastsignature(struct archive *);
 static ssize_t	 archive_seektoend(struct archive *);
-static ssize_t	 archive_seektonextfile(struct archive *);
 
-static int	 archive_readfileinfo(struct archive *, uint16_t *, char *, uint32_t *, uint32_t *);
+static ssize_t	 archive_readfileinfo(struct archive *, uint16_t *, char *, uint32_t *, uint32_t *);
 static void	 archive_appendfileinfo(struct archive *, uint16_t, char *, uint32_t, uint32_t);
 
 static void	 archive_rebuildcache(struct archive *);
@@ -100,10 +99,10 @@ archivefile_new(char *name, size_t offset)
 }
 
 static void
-archivefile_teardown(struct archivefile *af)
+archivefile_teardown(struct archivefile *a)
 {
-	free(out->name);
-	free(out);
+	free(a->name);
+	free(a);
 }
 
 static int
@@ -138,8 +137,9 @@ archive_keytopath(uint32_t key)
 {
 	char	*out;
 
-	out = asprintf(&out, "%s/%u.bundle", ARCHIVES, key);
-	if (out == NULL)
+	if (asprintf(&out, "%s/%u.bundle", ARCHIVES, key) < 0)
+		log_fatal("archive_keytopath: asprintf");
+
 	return out;
 }
 
@@ -147,11 +147,12 @@ static uint32_t
 archive_takecrc32(struct archive *a)
 {
 	char		*readbuffer;
-	uint32_t	 checksum;
+	uint32_t	 checksum = 0;
 	ssize_t		 bytesread;
 
-	readbuffer = reallocarray(1, ARCHIVE_BLOCKSIZE, sizeof(char));
-	if (readbuffer == NULL) goto end;
+	readbuffer = reallocarray(NULL, ARCHIVE_BLOCKSIZE, sizeof(char));
+	if (readbuffer == NULL)
+		log_fatal("archive_takecrc32: reallocarray");
 
 	checksum = crc32_z(checksum, NULL, 0);
 
@@ -161,7 +162,7 @@ archive_takecrc32(struct archive *a)
 
 	} else {
 		while ((bytesread = read(a->archivefd, readbuffer, ARCHIVE_BLOCKSIZE)) > 0)
-			checksum = crc32(checksum, readbuffer, (uint32_t)bytesread);
+			checksum = crc32(checksum, (Bytef *)readbuffer, (uint32_t)bytesread);
 
 		if (bytesread < 0)
 			log_fatal("archive_takecrc32: read");
@@ -170,6 +171,7 @@ archive_takecrc32(struct archive *a)
 	if (archive_seektoend(a) < 0)
 		log_fatal("archive_takecrc32: archive_seektoend");
 
+	free(readbuffer);
 	return checksum;
 }
 
@@ -195,9 +197,7 @@ archive_writecrc32(struct archive *a, uint32_t checksum)
 static ssize_t
 archive_seektostart(struct archive *a)
 {
-	ssize_t		seekstatus;
-
-	seekstatus = lseek(a->archivefd, 0, SEEK_SET);
+	return lseek(a->archivefd, 0, SEEK_SET);
 }
 
 static ssize_t
@@ -225,63 +225,61 @@ archive_seektoend(struct archive *a)
 	return lseek(a->archivefd, 0, SEEK_END);
 }
 
-static int
-archive_seektonextfile(struct archive *a)
-{
-	ssize_t		amtread, currentoffset, status = -1;
-	uint32_t	compressedsize;
-	uint16_t	labelsize;
-
-	currentoffset = lseek(a->archivefd, 0, SEEK_CUR);
-	if (currentoffset < 0)
-		log_fatal("archive_seektonextfile: lseek to current position");
-
-	if (archive_readfileinfo(a, &labelsize, NULL, NULL, &compressedsize) < 0)
-		status = -1;
-	else {
-		amtread = sizeof(uint16_t) + labelsize + 2 * sizeof(uint32_t);
-		amtread += compressedsize;
-
-		status = lseek(a->archivefd, (off_t)amtread, SEEK_CUR);
-		if (status < 0) log_fatal("archive_seektonextfile: lseek");
-	}
-
-	return status;
-}
-
-static int
+static ssize_t
 archive_readfileinfo(struct archive *a, uint16_t *labelsize, char *label,
 	uint32_t *uncompressedsize, uint32_t *compressedsize)
 {
 	char		*bufp;
-	char		 buf[sizeof(uint16_t) + MAXNAMESIZE + 2 * sizeof(uint32_t)]
+	char		 buf[sizeof(uint16_t) + MAXNAMESIZE + 2 * sizeof(uint32_t)];
 
-	ssize_t		 initial_offset, hdr_count;
+	ssize_t		 initial_offset, hdrcount = -1;
 	uint16_t	 labelsizecopy;
-
-	int		 status = -1;
 
 	initial_offset = lseek(a->archivefd, 0, SEEK_CUR);
 	if (initial_offset < 0) 
 		log_fatal("archive_readfileinfo: lseek for initial offset");
 
-	hdr_count = read(a->archivefd, buf, sizeof(uint16_t) + MAXNAMESIZE + 2 * sizeof(uint32_t));
+	hdrcount = read(a->archivefd, buf, sizeof(uint16_t));
 
-	if (hdr_count < 0)
-		log_fatal("archive_readfileinfo: read");
-	else if (hdr_count == 0) {
-		status = 
+	if (hdrcount < 0)
+		log_fatal("archive_readfileinfo: read label size");
+	else if (hdrcount == 0)
 		goto end;
-	} else if (hdr_count != sizeof(uint16_t) + MAXNAMESIZE + 2 * sizeof(uint32_t)) {
+
+	else if (hdrcount < (ssize_t)sizeof(uint16_t)) {
 		errno = EFTYPE;
+		hdrcount = -1;
 		goto end;
 	}
 
 	bufp = buf;
-	labelsizecopy = ntohs((uint16_t *)bufp);
+	labelsizecopy = ntohs(*(uint16_t *)bufp);
+	bufp += sizeof(uint16_t);
 
 	if (labelsize != NULL) *labelsize = labelsizecopy;
-	bufp += sizeof(uint16_t);
+
+	/* XXX: Need to integrity check this here, because we are
+	 * called by archive_isvalid, and there's a memcpy below that
+	 * would break if we got a bogus large label size
+	 */
+
+	if (labelsizecopy > MAXNAMESIZE) {
+		errno = ENAMETOOLONG;
+		hdrcount = -1;
+		goto end;
+	}
+
+	hdrcount = read(a->archivefd, bufp, labelsizecopy + 2 * sizeof(uint32_t));
+
+	if (hdrcount < 0)
+		log_fatal("archive_readfileinfo: read remainder of file header");
+	else if (hdrcount != labelsizecopy + 2 * sizeof(uint32_t)) {
+		errno = EFTYPE;
+		hdrcount = -1;
+		goto end;
+	}
+
+	hdrcount += sizeof(uint16_t);
 
 	if (label != NULL) {
 		memcpy(label, bufp, labelsizecopy);
@@ -291,19 +289,18 @@ archive_readfileinfo(struct archive *a, uint16_t *labelsize, char *label,
 	bufp += labelsizecopy;
 
 	if (uncompressedsize != NULL)
-		*uncompressedsize = ntohl((uint32_t *)bufp);
+		*uncompressedsize = ntohl(*(uint32_t *)bufp);
 	bufp += sizeof(uint32_t);
 
 	if (compressedsize != NULL)
-		*compressedsize = ntohl((uint32_t)bufp);
+		*compressedsize = ntohl(*(uint32_t *)bufp);
 
-	status = 0;
 end:
-	if (status < 0)
+	if (hdrcount < 0)
 		if (lseek(a->archivefd, initial_offset, SEEK_SET) != initial_offset)
 			log_fatal("archive_readfileinfo: reset to initial offset after EOF hit");
 
-	return status;
+	return hdrcount;
 }
 
 static void
@@ -318,30 +315,29 @@ archive_appendfileinfo(struct archive *a, uint16_t labelsize, char *label,
 	beuncompressedsize = htonl(uncompressedsize);
 	becompressedsize = htonl(compressedsize);
 
-	if (write(a->archivefd, belabelsize, sizeof(uint16_t)) != sizeof(uint16_t))
+	if (write(a->archivefd, &belabelsize, sizeof(uint16_t)) != sizeof(uint16_t))
 		goto end;
 
 	if (write(a->archivefd, label, labelsize) != (ssize_t)labelsize)
 		goto end;
 	
-	if (write(a->archivefd, beuncompressedsize, sizeof(uint32_t)) != sizeof(uint32_t))
+	if (write(a->archivefd, &beuncompressedsize, sizeof(uint32_t)) != sizeof(uint32_t))
 		goto end;
 
-	if (write(a->archivefd, becompressedsize, sizeof(uint32_t)) != sizeof(uint32_t))
+	if (write(a->archivefd, &becompressedsize, sizeof(uint32_t)) != sizeof(uint32_t))
 		goto end;
 
 	status = 0;
 end:
 	if (status < 0) log_fatal("archive_appendfileinfo: write");
-	else return status;
 }
 
 static void
 archive_rebuildcache(struct archive *a)
 {
 	char	 		 newname[MAXNAMESIZE + 1];
-	uint32_t		 newsize, newrealsize;
-	ssize_t	 		 newoffset = 0;
+	uint32_t		 newsize;
+	ssize_t	 		 amtread, newoffset = 0;
 
 	/* XXX: shouldn't happen, call archive_isvalid somewhere safe before
 	 * trying to set up data based off of it. archive_isvalid doesn't check
@@ -350,11 +346,15 @@ archive_rebuildcache(struct archive *a)
 	if (!archive_isvalid(a))
 		log_fatal("archive_rebuildcache: rebuilt invalid archive cache");
 
+	/* XXX: just making sure */
+	if (!RB_EMPTY(&a->cachedfiles))
+		log_fatalx("archive_rebuildcache: rebuilt non-empty cache");
+
 	newoffset = archive_seekpastsignature(a);
 	if (newoffset < 0)
 		log_fatal("archive_rebuildcache: archive_seekpastsignature");
 
-	while (archive_readfileinfo(NULL, newname, &newrealsize, &newsize) == 0) {
+	while ((amtread = archive_readfileinfo(a, NULL, newname, NULL, &newsize)) > 0) {
 		struct archivefile	*newentry;
 
 		newentry = archivefile_new(newname, (size_t)newoffset);
@@ -363,9 +363,11 @@ archive_rebuildcache(struct archive *a)
 		if (lseek(a->archivefd, (off_t)newsize, SEEK_CUR) < 0)
 			log_fatal("archive_rebuildcache: lseek over file body");
 
-		newoffset += sizeof(uint16_t) + 2 * sizeof(uint32_t) + strlen(newname);
+		newoffset += amtread;
 		newoffset += newsize;
 	}
+
+	if (amtread < 0) log_fatal("archive_rebuildcache: archive_readfileinfo");
 }
 
 struct archive *
@@ -375,7 +377,8 @@ archive_new(uint32_t key)
 	char		*newpath = NULL;
 	uint32_t	 initialcrc;
 
-	int		 newfd, flags = O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC;
+	int		 newfd = -1;
+	int		 flags = O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC;
 	mode_t		 mode = S_IRUSR | S_IRGRP;
 
 	if (archive_fromkey(key) != NULL) {
@@ -407,7 +410,7 @@ archive_new(uint32_t key)
 	if (!archive_isvalid(a))
 		log_fatalx("archive_new: fresh archive is not valid: %s", a->errstr);
 
-	archive_rebuildcache();
+	archive_rebuildcache(a);
 
 	out = a;
 	RB_INSERT(archivetree, &activearchives, out);
@@ -429,7 +432,7 @@ archive_fromfile(uint32_t key, char *path)
 {
 	struct archive	*a, *out = NULL;
 	char		*loadpath = NULL;
-	int		 loadfd;
+	int		 loadfd = -1;
 
 	if (archive_fromkey(key) != NULL) {
 		errno = EALREADY;
@@ -461,7 +464,7 @@ archive_fromfile(uint32_t key, char *path)
 		goto end;
 	}
 
-	archive_rebuildcache();
+	archive_rebuildcache(a);
 
 	out = a;
 	RB_INSERT(archivetree, &activearchives, out);
@@ -519,7 +522,6 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	struct archivefile	*newcacheentry;
 	size_t			 newcacheoffset;
 	uint32_t		 newcrc;
-	uint16_t		 newlabelsize;
 
 	char			*compressedbuf;
 	size_t		 	 compressedsize, compressedsizebound;
@@ -534,6 +536,11 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 		goto end;
 	}
 
+	if (archive_hasfile(a, fname)) {
+		archive_recorderror(a, "filename passed already in archive");
+		goto end;
+	}
+
 	newcacheoffset = lseek(a->archivefd, 0, SEEK_CUR);
 	if (newcacheoffset < 0)
 		log_fatal("archive_addfile: lseek");
@@ -544,7 +551,7 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	if (compressedbuf == NULL) log_fatal("archive_addfile: malloc");
 
 	compressedsize = compressedsizebound;
-	zstatus = compress(compressedbuf, &compressedsize, data, datasize);
+	zstatus = compress((Bytef *)compressedbuf, &compressedsize, (Bytef *)data, datasize);
 
 	if (zstatus != Z_OK)
 		log_fatalx("archive_addfile: compress: zstatus = %d", zstatus);
@@ -560,6 +567,7 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	newcrc = archive_takecrc32(a);
 	archive_writecrc32(a, newcrc);
 
+	free(compressedbuf);
 	status = 0;
 end:
 	return status;
@@ -589,7 +597,7 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 {
 	struct archivefile	*found, dummy;
 	char			*compressedbuf, *bufout = NULL;
-	size_t			 compressedsize;
+	uint32_t		 compressedsize, rawdatasize;
 	int			 zstatus;
 	
 	if (strlen(fname) > MAXNAMESIZE) {
@@ -597,7 +605,7 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 		goto end;
 	}
 
-	dummy.fname = fname;
+	dummy.name = fname;
 	found = RB_FIND(archivecache, &a->cachedfiles, &dummy);
 
 	if (found == NULL) {
@@ -608,8 +616,10 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 	if (lseek(a->archivefd, found->offset, SEEK_SET) < 0)
 		log_fatal("archive_loadfile: lseek");
 
-	if (archive_readfileinfo(a, NULL, NULL, datasizeout, &compressedsize) < 0)
+	if (archive_readfileinfo(a, NULL, NULL, &rawdatasize, &compressedsize) < 0)
 		log_fatal("archive_loadfile: archive_readfileinfo");
+
+	*datasizeout = (ssize_t)rawdatasize;
 
 	compressedbuf = reallocarray(NULL, compressedsize, sizeof(char));
 	if (compressedbuf == NULL)
@@ -622,7 +632,7 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 	if (read(a->archivefd, compressedbuf, compressedsize) < 0)
 		log_fatal("archive_loadfile: read");
 
-	zstatus = uncompress(bufout, datasizeout, compressedbuf, compressedsize);
+	zstatus = uncompress((Bytef *)bufout, datasizeout, (Bytef *)compressedbuf, compressedsize);
 	if (zstatus != Z_OK)
 		log_fatalx("archive_loadfile: uncompress returned zstatus %d", zstatus);
 
@@ -700,7 +710,7 @@ archive_writesignature(struct archive *a, char *signature)
 
 	bzero(writebuffer, sizeof(uint16_t) + MAXSIGSIZE);
 
-	memcpy(writebuffer, besignaturelen, sizeof(uint16_t));
+	memcpy(writebuffer, &besignaturelen, sizeof(uint16_t));
 	memcpy(writebuffer + sizeof(uint16_t), signature, signaturelen);
 
 	if (lseek(a->archivefd, sizeof(uint32_t), SEEK_SET) < 0)
@@ -714,6 +724,17 @@ archive_writesignature(struct archive *a, char *signature)
 		log_fatal("archive_writesignature: archive_seektoend");
 }
 
+char *
+archive_error(struct archive *a)
+{
+	char	*out;
+
+	out = strdup(a->errstr);
+	if (out == NULL) log_fatal("archive_error: strdup");
+
+	return out;
+}
+
 int
 archive_isvalid(struct archive *a)
 {
@@ -723,23 +744,24 @@ archive_isvalid(struct archive *a)
 	 * -> for each file,
 	 *	-> ensure header can be read at all; i.e. that it is long enough
 	 *	-> ensure file name size is sane
-	 *	-> ensure file compressed size + uncompressed sizes are sane
+	 *	-> ensure file uncompressed size is sane
 	 *	-> ensure file compressed size <= compressBound(uncompressed)
+	 *	-> ensure file is long enough i.e. no eof before compressed size
 	 */
 
-	ssize_t		archivelength;
+	ssize_t		amtread, archivelength, currentoffset;
 	uint32_t	claimedcrc, actualcrc;
 
-	char		*label;
+	char		 label[MAXNAMESIZE + 1];
 	uint32_t	 compressedsize, uncompressedsize;
 	uint16_t	 labelsize;
-	int		 status = -1;
+	int		 status = 0;
 	
 	archivelength = lseek(a->archivefd, 0, SEEK_END);
 	if (archivelength < 0)
 		log_fatal("archive_isvalid: lseek to ascertain length");
 
-	if (archivelength < sizeof(uint32_t) + sizeof(uint16_t) + MAXSIGSIZE) {
+	if (archivelength < (ssize_t)(sizeof(uint32_t) + sizeof(uint16_t) + MAXSIGSIZE)) {
 		archive_recorderror(a, "archive is too short (length %ld)", archivelength);
 		goto end;
 	}
@@ -752,8 +774,49 @@ archive_isvalid(struct archive *a)
 		goto end;
 	}
 
-	if (archive_seekpastsignature(a) < 0)
+	if ((currentoffset = archive_seekpastsignature(a)) < 0)
 		log_fatal("archive_isvalid: lseek to past signature");
 
+	for (;;) {
+		amtread = archive_readfileinfo( a,
+					       &labelsize,
+					        label,
+					       &uncompressedsize,
+					       &compressedsize);
+		
+		if (amtread < 0) {
+			archive_recorderror(a, "reading file info failed: %s", strerror(errno));
+			goto end;
+		} else if (amtread == 0) break;
+
+		/* XXX: this is already checked for, but let's pretend we don't know that */
+		if (labelsize > MAXNAMESIZE) {
+			archive_recorderror(a, "file label (length %u) too long", labelsize);
+			goto end;
+		}
+
+		if (uncompressedsize > MAXFILESIZE) {
+			archive_recorderror(a, "file (length %u) too long", label, uncompressedsize);
+			goto end;
+		}
+
+		if (compressedsize > compressBound(uncompressedsize)) {
+			archive_recorderror(a, "file compressed size is impossibly long");
+			goto end;
+		}
+
+		currentoffset += amtread + compressedsize;
+
+		if (currentoffset > archivelength) {
+			archive_recorderror(a, "file extends past end of archive file");
+			goto end;
+		}
+
+		if (lseek(a->archivefd, currentoffset, SEEK_SET) < 0)
+			log_fatal("archive_isvalid: lseek to next file");
+	}
+		
+	status = 1;
+end:
 	return status;
 }

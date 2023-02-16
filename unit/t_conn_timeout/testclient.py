@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append("../../regress")
+
 from connection import *
 from message import *
 from timeout import *

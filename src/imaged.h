@@ -204,6 +204,7 @@ uint32_t	 archive_getcrc32(struct archive *);
 char		*archive_getsignature(struct archive *);
 void		 archive_writesignature(struct archive *, char *);
 
+char		*archive_error(struct archive *);
 int		 archive_isvalid(struct archive *);
 
 #endif /* IMAGED_H */
