@@ -21,8 +21,6 @@
 
 #include "imaged.h"
 
-#define ARCHIVE_BLOCKSIZE	1048576
-
 struct archivefile {
 	char			*name;
 	size_t			 offset;
@@ -150,7 +148,7 @@ archive_takecrc32(struct archive *a)
 	uint32_t	 checksum = 0;
 	ssize_t		 bytesread;
 
-	readbuffer = reallocarray(NULL, ARCHIVE_BLOCKSIZE, sizeof(char));
+	readbuffer = reallocarray(NULL, BLOCKSIZE, sizeof(char));
 	if (readbuffer == NULL)
 		log_fatal("archive_takecrc32: reallocarray");
 
@@ -161,7 +159,7 @@ archive_takecrc32(struct archive *a)
 			log_fatal("archive_takecrc32: archive_seekpastsignature");
 
 	} else {
-		while ((bytesread = read(a->archivefd, readbuffer, ARCHIVE_BLOCKSIZE)) > 0)
+		while ((bytesread = read(a->archivefd, readbuffer, BLOCKSIZE)) > 0)
 			checksum = crc32(checksum, (Bytef *)readbuffer, (uint32_t)bytesread);
 
 		if (bytesread < 0)
@@ -819,4 +817,15 @@ archive_isvalid(struct archive *a)
 	status = 1;
 end:
 	return status;
+}
+
+char *
+archive_getpath(struct archive *a)
+{
+	char	*pathout;
+
+	pathout = strdup(a->path);
+	if (pathout == NULL) log_fatal("archive_getpath: strdup");
+
+	return pathout;
 }

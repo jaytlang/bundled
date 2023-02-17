@@ -3,8 +3,10 @@
  */
 
 #include <sys/types.h>
+#include <sys/time.h>
 
 #include <err.h>
+#include <event.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -22,12 +24,16 @@ parent_signal(int signal, short event, void *arg)
 {
 	log_writex(LOGTYPE_WARN, "clean shutdown");
 	exit(0);
+
+	(void)signal;
+	(void)event;
+	(void)arg;
 }
 
 __dead static void
 usage(void)
 {
-	fprintf(1, "usage: %s [-dhv]\n", __progname);
+	fprintf(stderr, "usage: %s [-dhv]\n", __progname);
 	exit(1);
 }
 
@@ -81,12 +87,12 @@ main(int argc, char *argv[])
 	log_init();
 	log_writex(LOGTYPE_DEBUG, "verbose logging enabled");
 
-	/* fire the main engines... */
+	/* drop the solid rocket boosters... */
+	if (!debug && daemon(0, 0) < 0) err(1, "daemonize");
+
+	/* and fire the main engines */
 	proc_startall(parent, frontend, engine);
 
-	/* and drop the solid rocket boosters */
-	if (!debug && daemon(0, 0) < 0) err(1, "daemonize");
-	
 	if (pledge("stdio", "") < 0)
 		log_fatal("pledge");
 

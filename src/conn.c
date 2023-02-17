@@ -20,10 +20,6 @@
 
 #include "imaged.h"
 
-#define CONN_CERT		"/etc/ssl/server.pem"
-#define CONN_KEY		"/etc/ssl/private/server.key"
-#define CONN_CA_PATH		"/etc/ssl/authority"
-
 #define CONN_LISTENBACKLOG	128
 #define CONN_MTU		1500
 
@@ -62,6 +58,7 @@ struct conn {
 
 	void			(*cb_receive)(struct conn *, struct netmsg *);
 	void			(*cb_timeout)(struct conn *);
+	void			(*cb_teardown)(struct conn *);
 
 	RB_ENTRY(conn)		  entries;
 };
@@ -399,6 +396,9 @@ conn_listen(void (*cb)(struct conn *))
 void
 conn_teardown(struct conn *c)
 {
+	if (c->cb_teardown != NULL)
+		c->cb_teardown(c);
+
 	RB_REMOVE(conntree, &allcons, c);
 
 	msgqueue_teardown(c->outgoing);
@@ -457,6 +457,12 @@ conn_stopreceiving(struct conn *c)
 	if (event_pending(&c->event_receive, EV_READ, NULL))
 		if (event_del(&c->event_receive) < 0)
 			log_fatal("conn_stopreceiving: event_del");
+}
+
+void
+conn_setteardowncb(struct conn *c, void (*cb)(struct conn *))
+{
+	c->cb_teardown = cb;
 }
 
 void

@@ -93,6 +93,7 @@ class Message:
 		try:
 			file = MessageField.from_bytes(bytes[1 + label.length():])
 			return cls(opcode, label=label.content(), file=file.content())
+
 		except IndexError: return MESSAGE_INCOMPLETE
 
 	def to_bytes(self):

@@ -2,7 +2,17 @@ PROG=		imaged
 NOMAN=		noman
 BINDIR?=	/usr/sbin
 
-SRCS=	ipcmsg.c log.c proc.c frontend.c engine.c
+SRCS=	archive.c	\
+	buffer.c	\
+	conn.c		\
+	engine.c	\
+	frontend.c	\
+	imaged.c	\
+	ipcmsg.c	\
+	log.c		\
+	msgqueue.c	\
+	netmsg.c	\
+	proc.c
 
 COPTS+= -Wall -Wextra -Werror -pedantic -I..
 LDADD+= -lutil -levent -lz -ltls

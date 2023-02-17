@@ -9,7 +9,7 @@ conn.connect(server_hostname, server_port)
 fname = "t" * 2000 + ".txt"
 file = "h" * 3000
 
-message = Message(MessageOp.ERROR, "disaster hath struck")
+message = Message(MessageOp.ERROR, b"disaster hath struck")
 conn.write_bytes(message.to_bytes())
 
 to = Timeout(5)

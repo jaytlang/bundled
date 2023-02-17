@@ -22,15 +22,15 @@
 
 struct msgfile {
 	uint64_t		 fileid;
-	SLIST_ENTRY(msgfile)	 entries;
+	STAILQ_ENTRY(msgfile)	 entries;
 };
 
-SLIST_HEAD(msgfilelist, msgfile);
+STAILQ_HEAD(msgfilelist, msgfile);
 
 static char	*msgfile_reservepath(void);
 static void	 msgfile_releasepath(char *);
 
-static struct msgfilelist	freefiles = SLIST_HEAD_INITIALIZER(&freefiles);
+static struct msgfilelist	freefiles = STAILQ_HEAD_INITIALIZER(freefiles);
 static uint64_t			maxfileid = 0;
 
 
@@ -41,6 +41,8 @@ struct netmsg {
 	uint8_t	 	  opcode;
 	char		 *path;
 	int	 	  descriptor;
+
+	int		  persist;
 
 	int		(*closestorage)(int);
 	ssize_t		(*readstorage)(int, void *, size_t);
@@ -60,27 +62,39 @@ static void	netmsg_committype(struct netmsg *);
 static char *
 msgfile_reservepath(void)
 {
-	uint64_t	 newid;
+	struct msgfile	*newfile, *first = NULL;
 	char		*newpath = NULL;
+	uint64_t	 newid;
 
-	if (SLIST_EMPTY(&freefiles)) {
+	if (STAILQ_EMPTY(&freefiles)) {
+newfile:
 		if (maxfileid == UINT64_MAX) {
 			errno = EMFILE;
 			goto end;
 		}
 
 		newid = maxfileid++;
-	} else {
-		struct msgfile	*newfile;
 
-		newfile = SLIST_FIRST(&freefiles);
-		SLIST_REMOVE_HEAD(&freefiles, entries);
+	} else {
+again:
+		newfile = STAILQ_FIRST(&freefiles);
+
+		if (first == NULL) first = newfile;
+		else if (newfile == first) goto newfile;
+
+		STAILQ_REMOVE_HEAD(&freefiles, entries);
 
 		newid = newfile->fileid;
 		free(newfile);
 	}
 
-	asprintf(&newpath, "%s/%llu", MESSAGES, newid);
+	asprintf(&newpath, "%s/%llu", CHROOT MESSAGES, newid);
+
+	if (access(newpath, F_OK) == 0) {
+		STAILQ_INSERT_TAIL(&freefiles, newfile, entries);
+		goto again;
+	}
+
 end:
 	return newpath;
 }
@@ -91,7 +105,8 @@ msgfile_releasepath(char *oldpath)
 	struct msgfile	*freefile;
 	uint64_t	 oldid;
 
-	if (sscanf(oldpath, MESSAGES "/%llu", &oldid) != 1)
+	log_writex(LOGTYPE_DEBUG, "oldpath = %s", oldpath);
+	if (sscanf(oldpath, CHROOT MESSAGES "/%llu", &oldid) != 1)
 		log_fatalx("msgfile_free: sscanf on %s failed to extract file id");
 
 	free(oldpath);
@@ -101,7 +116,7 @@ msgfile_releasepath(char *oldpath)
 		log_fatalx("msgfile_free: failed to allocate free file description");
 
 	freefile->fileid = oldid;
-	SLIST_INSERT_HEAD(&freefiles, freefile, entries);
+	STAILQ_INSERT_HEAD(&freefiles, freefile, entries);
 }
 
 struct netmsg *
@@ -154,6 +169,7 @@ netmsg_new(uint8_t opcode)
 	out->opcode = opcode;
 	out->descriptor = descriptor;
 	out->path = path;
+	out->persist = 0;
 
 	if (diskmsg) {
 		out->closestorage = close;
@@ -183,6 +199,7 @@ end:
 
 		if (path != NULL) {
 			unlink(path);
+			log_writex(LOGTYPE_DEBUG, "culprit: _new");
 			msgfile_releasepath(path);
 		}
 	}
@@ -191,11 +208,15 @@ end:
 }
 
 struct netmsg *
-netmsg_loadweakly(char *path)
+netmsg_takeownership(char *path)
 {
 	struct netmsg	*out = NULL;
 	int		 loadfd;
 	uint8_t		 opcode;
+	char		*pathcopy;
+
+	pathcopy = strdup(path);
+	if (pathcopy == NULL) goto end;
 
 	loadfd = open(path, O_RDONLY);
 	if (loadfd < 0) goto end;
@@ -210,8 +231,8 @@ netmsg_loadweakly(char *path)
 
 	out->opcode = opcode;
 	out->descriptor = loadfd;
-
-	/* don't set path -> no unlinking will fire in teardown */
+	out->path = pathcopy;
+	out->persist = -1;
 
 	out->closestorage = close;
 	out->readstorage = read;
@@ -220,8 +241,26 @@ netmsg_loadweakly(char *path)
 	out->truncatestorage = ftruncate;
 
 end:
+	if (out == NULL) {
+		if (loadfd > 0) close(loadfd);
+
+		if (pathcopy != NULL) {
+			unlink(pathcopy);
+			log_writex(LOGTYPE_DEBUG, "culprit: takeownership");
+			msgfile_releasepath(pathcopy);
+			free(pathcopy);
+		}
+	}
+
 	return out;
 }
+
+void
+netmsg_persistfile(struct netmsg *m)
+{
+	m->persist = 1;
+}
+
 
 void
 netmsg_teardown(struct netmsg *m)
@@ -229,8 +268,18 @@ netmsg_teardown(struct netmsg *m)
 	m->closestorage(m->descriptor);
 
 	if (m->path != NULL) {
-		unlink(m->path);
-		msgfile_releasepath(m->path);
+		switch (m->persist) {
+		case 1:
+			msgfile_releasepath(m->path);
+			break;
+		case 0:
+			unlink(m->path);
+			msgfile_releasepath(m->path);
+			break;
+		case -1:
+			unlink(m->path);
+			break;
+		}
 	}
 
 	free(m);
@@ -408,6 +457,17 @@ netmsg_gettype(struct netmsg *m)
 }
 
 char *
+netmsg_getpath(struct netmsg *m)
+{
+	char	*pathout;
+
+	pathout = strdup(m->path);
+	if (pathout == NULL) log_fatal("netmsg_getpath: strdup");
+
+	return pathout;
+}
+
+char *
 netmsg_getlabel(struct netmsg *m)
 {
 	char		*out = NULL;
@@ -485,7 +545,6 @@ netmsg_setlabel(struct netmsg *m, char *newlabel)
 		}
 	}
 
-	log_writex(LOGTYPE_DEBUG, "truncating storage with descriptor %d", m->descriptor);
 	if (m->truncatestorage(m->descriptor, sizeof(uint8_t)) < 0)
 		log_fatal("netmsg_setlabel: failed to truncate buffer down before relabel");
 

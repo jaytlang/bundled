@@ -376,3 +376,9 @@ myproc_stoplisten(int source)
 		bzero(&p->readevents[source], sizeof(struct event));
 	}
 }
+
+int
+myproc_ischrooted(void)
+{
+	return p->chroot != NULL;
+}

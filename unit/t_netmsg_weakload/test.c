@@ -42,7 +42,7 @@ main()
 	}
 
 	/* in all probability */
-	weakuut = netmsg_loadweakly(MESSAGES "/0");
+	weakuut = netmsg_loadweakly(CHROOT MESSAGES "/0");
 	if (weakuut == NULL) err(1, "netmsg_loadweakly");
 
 	if (!netmsg_isvalid(weakuut, &unrecoverable)) {

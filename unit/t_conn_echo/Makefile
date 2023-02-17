@@ -6,6 +6,5 @@ SRCS+=	${SRCDIR}/conn.c	\
 	test.c
 
 TESTUSER=	root
-COPTS+=		-DMESSAGES=\"/var/imaged/messages\"
 
 .include <bsd.prog.mk>

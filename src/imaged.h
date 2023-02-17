@@ -11,23 +11,20 @@
 #define USER		"_imaged"
 #define CHROOT		"/var/imaged"
 
-/* changing around for unit tests */
-#ifndef MESSAGES
 #define MESSAGES	"/messages"
-#endif /* MESSAGES */
 
+/* changing this around for unit tests */
 #ifndef ARCHIVES
 #define ARCHIVES	"/archives"
 #endif /* ARCHIVES */
 
-#ifndef SIGNATURES
 #define SIGNATURES	"/signatures"
-#endif /* SIGNATURES */
 
 #define	ERRSTRSIZE	500
 #define MAXNAMESIZE	1024
-#define MAXFILESIZE	1048576
+#define MAXFILESIZE	10485760
 #define MAXSIGSIZE	512
+#define BLOCKSIZE	1048576
 
 extern char *__progname;
 extern int debug, verbose;
@@ -86,8 +83,9 @@ struct netmsg;
 #define NETOP_MAX	7
 
 struct netmsg	*netmsg_new(uint8_t);
-struct netmsg	*netmsg_loadweakly(char *);
+struct netmsg	*netmsg_takeownership(char *);
 
+void		 netmsg_persistfile(struct netmsg *);
 void		 netmsg_teardown(struct netmsg *);
 
 const char	*netmsg_error(struct netmsg *);
@@ -99,6 +97,7 @@ ssize_t		 netmsg_seek(struct netmsg *, ssize_t, int);
 int		 netmsg_truncate(struct netmsg *, ssize_t);
 
 uint8_t		 netmsg_gettype(struct netmsg *);
+char		*netmsg_getpath(struct netmsg *);
 
 char		*netmsg_getlabel(struct netmsg *);
 int		 netmsg_setlabel(struct netmsg *, char *);
@@ -123,7 +122,17 @@ int		 netmsg_isvalid(struct netmsg *, int *);
 
 #define IMSG_HELLO              0
 #define IMSG_INITFD             1
-#define IMSG_MAX                2
+
+#define IMSG_NEWARCHIVE		2
+#define IMSG_ADDFILE		3
+#define IMSG_PLEASESIGN		4
+#define IMSG_KILLARCHIVE	5
+
+#define IMSG_NEWARCHIVEACK	6
+#define IMSG_ADDFILEACK		7
+#define IMSG_SIGNEDBUNDLE	8
+
+#define IMSG_MAX                9
 
 struct proc;
 
@@ -138,6 +147,7 @@ void		 proc_startall(struct proc *, struct proc *, struct proc *);
 void    	 myproc_send(int, int, int, struct ipcmsg *);
 void    	 myproc_listen(int, void (*cb)(int, int, struct ipcmsg *));
 void    	 myproc_stoplisten(int);
+int		 myproc_ischrooted(void);
 
 void		 frontend_launch(void);
 void		 engine_launch(void);
@@ -145,6 +155,10 @@ void		 engine_launch(void);
 /* conn.c */
 
 #define CONN_PORT	443
+
+#define CONN_CA_PATH	"/etc/ssl/authority"
+#define CONN_CERT	"/etc/ssl/server.pem"
+#define CONN_KEY	"/etc/ssl/private/server.key"
 
 struct conn;
 
@@ -154,6 +168,8 @@ void			 conn_teardownall(void);
 
 void			 conn_receive(struct conn *, void (*)(struct conn *, struct netmsg *));
 void			 conn_stopreceiving(struct conn *);
+
+void			 conn_setteardowncb(struct conn *, void (*)(struct conn *));
 
 void			 conn_settimeout(struct conn *, struct timeval *, void (*)(struct conn *));
 void			 conn_canceltimeout(struct conn *);
@@ -206,5 +222,7 @@ void		 archive_writesignature(struct archive *, char *);
 
 char		*archive_error(struct archive *);
 int		 archive_isvalid(struct archive *);
+
+char		*archive_getpath(struct archive *);
 
 #endif /* IMAGED_H */
