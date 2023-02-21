@@ -22,32 +22,30 @@ for fname in testfiles:
 	conn.write_bytes(message.to_bytes())
 
 	to = Timeout(1)
-	response_bytes = conn.read_bytes()
+	response = Message.from_conn(conn)
 	to.cancel()
 
-	response = Message.from_bytes(response_bytes)
-	if message == MESSAGE_INCOMPLETE:
+	if response == MESSAGE_INCOMPLETE:
 		raise ValueError("received incomplete response")
-	elif message.opcode() != MessageOp.ACK:
-		raise ValueError(f"received non-ack opcode {message.opcode()}")
-
+	elif response.opcode() != MessageOp.ACK:
+		raise ValueError(f"received non-ack opcode {response.opcode()}")
 
 message = Message(MessageOp.SIGN)
 conn.write_bytes(message.to_bytes())
 
 to = Timeout(1)
-response_bytes = conn.read_bytes()
+response = Message.from_conn(conn)
 to.cancel()
 
-response = Message.from_bytes(response_bytes)
-if message == MESSAGE_INCOMPLETE:
+if response == MESSAGE_INCOMPLETE:
 	raise ValueError("received incomplete response")
-elif message.opcode() != MessageOp.BUNDLE:
-	raise ValueError(f"received non-bundle opcode {message.opcode()}")
+elif response.opcode() != MessageOp.BUNDLE:
+	raise ValueError(f"received non-bundle opcode {response.opcode()}")
 
-with open(message.label(), 'wb') as f:
-	f.write(message.file())
+f = open("1.bundle", 'wb')
+f.write(response.file())
+f.close()
 
-subprocess.run(["hexdump", "-C", message.label()])
+subprocess.run(["hexdump", "-C", "1.bundle"])
 
-os.unlink(message.label())
+os.unlink("1.bundle")

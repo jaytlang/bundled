@@ -90,6 +90,7 @@ main()
 
 	free(nfdata);
 	free(fdata);
+
 	archive_teardown(wa);
 	archive_teardown(a);
 }

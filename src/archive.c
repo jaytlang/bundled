@@ -46,6 +46,8 @@ struct archive {
 	char		 	 errstr[ERRSTRSIZE];
 
 	struct archivecache	 cachedfiles;
+	uint64_t		 numfiles;
+
 	RB_ENTRY(archive)	 entries;
 };
 
@@ -63,7 +65,7 @@ static ssize_t	 archive_seektoend(struct archive *);
 static ssize_t	 archive_readfileinfo(struct archive *, uint16_t *, char *, uint32_t *, uint32_t *);
 static void	 archive_appendfileinfo(struct archive *, uint16_t, char *, uint32_t, uint32_t);
 
-static void	 archive_rebuildcache(struct archive *);
+static uint64_t	 archive_cacheallfiles(struct archive *);
 
 
 RB_HEAD(archivetree, archive);
@@ -330,10 +332,11 @@ end:
 	if (status < 0) log_fatal("archive_appendfileinfo: write");
 }
 
-static void
-archive_rebuildcache(struct archive *a)
+static uint64_t
+archive_cacheallfiles(struct archive *a)
 {
 	char	 		 newname[MAXNAMESIZE + 1];
+	uint64_t		 tally = 0;
 	uint32_t		 newsize;
 	ssize_t	 		 amtread, newoffset = 0;
 
@@ -342,15 +345,15 @@ archive_rebuildcache(struct archive *a)
 	 * the cache, so this should mostly pass if everything else is set up.
 	 */
 	if (!archive_isvalid(a))
-		log_fatal("archive_rebuildcache: rebuilt invalid archive cache");
+		log_fatal("archive_cacheallfiles: rebuilt invalid archive cache");
 
 	/* XXX: just making sure */
 	if (!RB_EMPTY(&a->cachedfiles))
-		log_fatalx("archive_rebuildcache: rebuilt non-empty cache");
+		log_fatalx("archive_cacheallfiles: rebuilt non-empty cache");
 
 	newoffset = archive_seekpastsignature(a);
 	if (newoffset < 0)
-		log_fatal("archive_rebuildcache: archive_seekpastsignature");
+		log_fatal("archive_cacheallfiles: archive_seekpastsignature");
 
 	while ((amtread = archive_readfileinfo(a, NULL, newname, NULL, &newsize)) > 0) {
 		struct archivefile	*newentry;
@@ -359,13 +362,17 @@ archive_rebuildcache(struct archive *a)
 		RB_INSERT(archivecache, &a->cachedfiles, newentry);
 
 		if (lseek(a->archivefd, (off_t)newsize, SEEK_CUR) < 0)
-			log_fatal("archive_rebuildcache: lseek over file body");
+			log_fatal("archive_cacheallfiles: lseek over file body");
 
 		newoffset += amtread;
 		newoffset += newsize;
+
+		tally++;
 	}
 
-	if (amtread < 0) log_fatal("archive_rebuildcache: archive_readfileinfo");
+	if (amtread < 0) log_fatal("archive_cacheallfiles: archive_readfileinfo");
+
+	return tally;
 }
 
 struct archive *
@@ -377,7 +384,7 @@ archive_new(uint32_t key)
 
 	int		 newfd = -1;
 	int		 flags = O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC;
-	mode_t		 mode = S_IRUSR | S_IRGRP;
+	mode_t		 mode = S_IRUSR | S_IWUSR | S_IRGRP;
 
 	if (archive_fromkey(key) != NULL) {
 		errno = EALREADY;
@@ -408,7 +415,7 @@ archive_new(uint32_t key)
 	if (!archive_isvalid(a))
 		log_fatalx("archive_new: fresh archive is not valid: %s", a->errstr);
 
-	archive_rebuildcache(a);
+	archive_cacheallfiles(a);
 
 	out = a;
 	RB_INSERT(archivetree, &activearchives, out);
@@ -462,7 +469,7 @@ archive_fromfile(uint32_t key, char *path)
 		goto end;
 	}
 
-	archive_rebuildcache(a);
+	a->numfiles = archive_cacheallfiles(a);
 
 	out = a;
 	RB_INSERT(archivetree, &activearchives, out);
@@ -514,6 +521,17 @@ archive_teardown(struct archive *a)
 	free(a);
 }
 
+void
+archive_teardownall(void)
+{
+	struct archive *a;
+
+	while (!RB_EMPTY(&activearchives)) {
+		a = RB_ROOT(&activearchives);
+		archive_teardown(a);
+	}
+}
+
 int
 archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 {
@@ -536,6 +554,11 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 
 	if (archive_hasfile(a, fname)) {
 		archive_recorderror(a, "filename passed already in archive");
+		goto end;
+	}
+
+	if (a->numfiles == ARCHIVE_MAXFILES) {
+		archive_recorderror(a, "too many files already in archive");
 		goto end;
 	}
 
@@ -566,6 +589,7 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	archive_writecrc32(a, newcrc);
 
 	free(compressedbuf);
+	a->numfiles++;
 	status = 0;
 end:
 	return status;

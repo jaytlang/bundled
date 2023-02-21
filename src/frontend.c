@@ -32,6 +32,8 @@ struct activeconn {
 	int			 shouldheartbeat;
 	char			 peer[FRONTEND_ADDRESSSIZE];
 
+	struct netmsg		*pendingmsg;
+
 	SLIST_ENTRY(activeconn)	 freelist_entries;
 	RB_ENTRY(activeconn)	 bykey_entries;
 	RB_ENTRY(activeconn)	 byptr_entries;
@@ -53,11 +55,10 @@ static int			 activeconn_compareptrs(struct activeconn *, struct activeconn *);
 static void			 activeconn_errortoclient(struct activeconn *, const char *, ...);
 static void			 activeconn_requesttoengine(struct activeconn *, int, char *);
 
-/* misc. helpers
- * XXX: move this guy? generalize? the engine
- * does a similar operation except it loads weakly
+/* misc. helper
+ * XXX: move this guy? generalize?
  */
-static struct netmsg		*netmsg_withfilefromipcmsg(uint8_t, char *, struct ipcmsg *);
+static struct netmsg		*conn_makemsgfromarchive(char *);
 
 
 static void	conn_accept(struct conn *);
@@ -113,6 +114,7 @@ activeconn_new(struct conn *c)
 	free(peer);
 
 	out->c = c;
+
 	RB_INSERT(activekeytree, &connsbykey, out);
 	RB_INSERT(activeptrtree, &connsbyptr, out);
 end:
@@ -132,6 +134,12 @@ activeconn_handleteardown(struct conn *c)
 	RB_REMOVE(activeptrtree, &connsbyptr, ac);
 
 	ac->c = NULL;
+
+	if (ac->pendingmsg != NULL) {
+		log_writex(LOGTYPE_WARN, "tearing down pending message for peer %s", ac->peer);
+		netmsg_teardown(ac->pendingmsg);
+		ac->pendingmsg = NULL;
+	}
 
 	SLIST_INSERT_HEAD(&freeconns, ac, freelist_entries);
 }
@@ -226,51 +234,62 @@ activeconn_requesttoengine(struct activeconn *ac, int request, char *label)
 }
 
 static struct netmsg *
-netmsg_withfilefromipcmsg(uint8_t type, char *label, struct ipcmsg *m)
+conn_makemsgfromarchive(char *label)
 {
 	struct netmsg	*out;
-	char		*file;
+	int		 fd, unrecoverable;
+
+	char		*reallabel;
+	size_t		 reallabelsize;
 
 	char		*buf;
 	uint64_t	 bebufsize;
 	ssize_t		 bufsize;
-	int		 fd, unrecoverable;
 
-	out = netmsg_new(type);
-	if (out == NULL) log_fatal("netmsg_withfilefromipcmsg: netmsg_new");
+	out = netmsg_new(NETOP_BUNDLE);
+	if (out == NULL) log_fatal("conn_makemsgfromarchive: netmsg_new");
 
-	if (netmsg_setlabel(out, label) < 0)
-		log_fatalx("netmsg_withfilefromipcmsg: netmsg_setlabel: %s", netmsg_error(out));
+	reallabelsize = strlen(label) + strlen(CHROOT) + 1;
 
-	file = ipcmsg_getmsg(m);	
+	reallabel = reallocarray(NULL, reallabelsize, sizeof(char));
+	if (reallabel == NULL) log_fatal("conn_makemsgfromarchive: reallocarray");
 
-	fd = open(file, O_RDONLY);
-	if (fd < 0) log_fatal("netmsg_withfilefromipcmsg: open");
+	strlcpy(reallabel, CHROOT, reallabelsize);
+	strlcat(reallabel, label, reallabelsize);
+
+	netmsg_setlabel(out, reallabel);
+
+	fd = open(reallabel, O_RDONLY);
+	if (fd < 0) log_fatal("conn_makemsgfromarchive: open %s", reallabel);
 
 	if ((bufsize = lseek(fd, 0, SEEK_END)) < 0 || lseek(fd, 0, SEEK_SET) < 0)
 		log_fatal("netmsg_withfilefromipc: lseek");
 
-	bebufsize = htobe64((uint16_t)bufsize);
+	bebufsize = htobe64((uint64_t)bufsize);
 
 	buf = reallocarray(NULL, (size_t)bufsize, sizeof(char));
 	if (buf == NULL) log_fatal("netmsg_withfilefromipc: reallocarray");
 
-	if (netmsg_seek(out, sizeof(uint64_t), SEEK_END) < 0)
-		log_fatal("netmsg_withfilefromipcmsg: netmsg_seek");
+	if (read(fd, buf, bufsize) < 0)
+		log_fatal("conn_makemsgfromarchive: read");
+
+	if (netmsg_seek(out, 0, SEEK_END) < 0)
+		log_fatal("conn_makemsgfromarchive: netmsg_seek");
 
 	if (netmsg_write(out, &bebufsize, sizeof(uint64_t)) < 0)
-		log_fatal("netmsg_withfilefromipcmsg: netmsg_write message size");
+		log_fatal("conn_makemsgfromarchive: netmsg_write message size");
 
 	if (netmsg_write(out, buf, (size_t)bufsize) < 0)
-		log_fatal("netmsg_withfilefromipcmsg: netmsg_write message");
+		log_fatal("conn_makemsgfromarchive: netmsg_write message");
 
 	free(buf);
+	free(reallabel);
+
 	close(fd);
-	free(file);
 
 	/* XXX: sanity check */
 	if (debug && !netmsg_isvalid(out, &unrecoverable))
-		log_fatalx("netmsg_withfilefromipcmsg: netmsg not valid: %s",
+		log_fatalx("conn_makemsgfromarchive: netmsg not valid: %s",
 			netmsg_error(out));
 
 	return out;
@@ -353,9 +372,9 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 
 	case NETOP_WRITE:
 		msgpath = netmsg_getpath(m);
-		log_writex(LOGTYPE_DEBUG, "have a netmsg at path %s", msgpath);
+		netmsg_retain(m);
+		ac->pendingmsg = m;
 
-		netmsg_persistfile(m);
 		activeconn_requesttoengine(ac, IMSG_ADDFILE, msgpath);
 
 		free(msgpath);
@@ -384,8 +403,6 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 
 	ac = activeconn_bykey(ipcmsg_getkey(msg));
 
-	log_writex(LOGTYPE_DEBUG, "parent response hours (message type = %d)", type);
-
 	switch (type) {
 
 	case IMSG_NEWARCHIVEACK:
@@ -396,6 +413,9 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 		response = netmsg_new(NETOP_ACK);
 		if (response == NULL) log_fatal("proc_getmsg: netmsg_new");
 
+		netmsg_teardown(ac->pendingmsg);
+		ac->pendingmsg = NULL;
+
 		conn_send(ac->c, response);
 		conn_receive(ac->c, conn_getmsg);
 		break;
@@ -403,13 +423,11 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 	case IMSG_SIGNEDBUNDLE:
 		archivepath = ipcmsg_getmsg(msg);
 
-		response = netmsg_withfilefromipcmsg(NETOP_BUNDLE,
-			archivepath, msg);
+		response = conn_makemsgfromarchive(archivepath);
 
 		conn_send(ac->c, response);
 		conn_receive(ac->c, conn_getmsg);
 
-		netmsg_teardown(response);
 		free(archivepath);
 		break;
 
@@ -455,4 +473,15 @@ frontend_launch(void)
 
 	event_dispatch();
 	conn_teardownall();
+}
+
+__dead void
+frontend_signal(int signal, short event, void *arg)
+{
+	conn_teardownall();
+	exit(0);
+
+	(void)signal;
+	(void)event;
+	(void)arg;
 }

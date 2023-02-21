@@ -351,13 +351,13 @@ conn_dosend(struct msgqueue *mq, struct conn *c)
 		log_fatalx("conn_dosend: fired when msgqueue empty somehow");
 
 	sendsize = netmsg_seek(sendmsg, 0, SEEK_END);
-	if (sendsize < 0) log_fatalx("conn_dosend: netmsg_seek to end");
+	if (sendsize < 0) log_fatal("conn_dosend: netmsg_seek to end");
 
 	sendoffset = (ssize_t)msgqueue_getcachedoffset(mq);
 	sendsize -= sendoffset;
 
 	if (netmsg_seek(sendmsg, sendoffset, SEEK_SET) < 0)
-		log_fatalx("conn_dosend: netmsg_seek to cached offset");
+		log_fatal("conn_dosend: netmsg_seek to cached offset");
 
 	rawmsg = reallocarray(NULL, sendsize, sizeof(char));
 	if (rawmsg == NULL) log_fatal("conn_dosend: reallocarray");

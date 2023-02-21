@@ -58,8 +58,7 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 		break;
 
 	case IMSG_ADDFILE:
-		log_writex(LOGTYPE_DEBUG, "will try to load %s", relmsgfile);
-		weakmsg = netmsg_takeownership(relmsgfile);
+		weakmsg = netmsg_loadweakly(relmsgfile);
 		if (weakmsg == NULL) log_fatal("proc_getmsg: netmsg_loadweakly");
 
 		fname = netmsg_getlabel(weakmsg);	
@@ -77,7 +76,6 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 
 		free(fname);
 		free(fdata);
-		log_writex(LOGTYPE_DEBUG, "weak teardown");
 		netmsg_teardown(weakmsg);
 
 		engine_replytofrontend(IMSG_ADDFILEACK, key, NULL);
@@ -118,4 +116,16 @@ engine_launch(void)
 	myproc_listen(PROC_FRONTEND, proc_getmsg);
 
 	event_dispatch();
+	archive_teardownall();
+}
+
+__dead void
+engine_signal(int signal, short event, void *arg)
+{
+	archive_teardownall();
+	exit(0);
+
+	(void)signal;
+	(void)event;
+	(void)arg;
 }

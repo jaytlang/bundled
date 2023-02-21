@@ -77,5 +77,5 @@ main()
 
 	free(afdata);
 	free(bfdata);
-/*	archive_teardown(a); */
+	archive_teardown(a);
 }

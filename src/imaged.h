@@ -20,10 +20,11 @@
 
 #define SIGNATURES	"/signatures"
 
-#define	ERRSTRSIZE	500
 #define MAXNAMESIZE	1024
 #define MAXFILESIZE	10485760
 #define MAXSIGSIZE	512
+
+#define	ERRSTRSIZE	500
 #define BLOCKSIZE	1048576
 
 extern char *__progname;
@@ -83,9 +84,9 @@ struct netmsg;
 #define NETOP_MAX	7
 
 struct netmsg	*netmsg_new(uint8_t);
-struct netmsg	*netmsg_takeownership(char *);
+struct netmsg	*netmsg_loadweakly(char *);
 
-void		 netmsg_persistfile(struct netmsg *);
+void		 netmsg_retain(struct netmsg *);
 void		 netmsg_teardown(struct netmsg *);
 
 const char	*netmsg_error(struct netmsg *);
@@ -150,7 +151,10 @@ void    	 myproc_stoplisten(int);
 int		 myproc_ischrooted(void);
 
 void		 frontend_launch(void);
+__dead void	 frontend_signal(int, short, void *);
+
 void		 engine_launch(void);
+__dead void	 engine_signal(int, short, void *);
 
 /* conn.c */
 
@@ -204,6 +208,8 @@ nothing(int a, int b, struct ipcmsg *c)
 
 /* archive.c */
 
+#define ARCHIVE_MAXFILES	100
+
 struct archive;
 
 struct archive	*archive_new(uint32_t);
@@ -211,6 +217,7 @@ struct archive	*archive_fromfile(uint32_t, char *);
 struct archive	*archive_fromkey(uint32_t);
 
 void		 archive_teardown(struct archive *);
+void		 archive_teardownall(void);
 
 int		 archive_addfile(struct archive *, char *, char *, size_t);
 int		 archive_hasfile(struct archive *, char *);

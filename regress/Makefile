@@ -32,6 +32,6 @@ daemon_start:
 daemon_stop:
 	doas rcctl stop ${RCDAEMON}
 	doas rcctl disable ${RCDAEMON}
-	rm -rf __pycache__
+	doas rm -rf __pycache__
 
 .include <bsd.regress.mk>

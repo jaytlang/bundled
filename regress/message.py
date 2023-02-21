@@ -58,7 +58,8 @@ class Message:
 		self._file = None
 
 		if label is not None: self._label = MessageField(label)
-		if file is not None: self._file = MessageField(file)
+		if file is not None:
+			self._file = MessageField(file)
 
 	@classmethod
 	def from_conn(cls, conn, timeout=None):
@@ -77,7 +78,7 @@ class Message:
 		full_length = len(bytes)
 		if full_length < 1: return MESSAGE_INCOMPLETE
 
-		try: opcode = MessageOp(bytes[0])
+		try: opcode = MessageOp(int(bytes[0]))
 		except ValueError:
 			raise ValueError(f"invalid opcode {opcode} received")
 

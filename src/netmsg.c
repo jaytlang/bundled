@@ -42,7 +42,7 @@ struct netmsg {
 	char		 *path;
 	int	 	  descriptor;
 
-	int		  persist;
+	int		  retain;
 
 	int		(*closestorage)(int);
 	ssize_t		(*readstorage)(int, void *, size_t);
@@ -62,12 +62,11 @@ static void	netmsg_committype(struct netmsg *);
 static char *
 msgfile_reservepath(void)
 {
-	struct msgfile	*newfile, *first = NULL;
+	struct msgfile	*newfile;
 	char		*newpath = NULL;
 	uint64_t	 newid;
 
 	if (STAILQ_EMPTY(&freefiles)) {
-newfile:
 		if (maxfileid == UINT64_MAX) {
 			errno = EMFILE;
 			goto end;
@@ -76,12 +75,7 @@ newfile:
 		newid = maxfileid++;
 
 	} else {
-again:
 		newfile = STAILQ_FIRST(&freefiles);
-
-		if (first == NULL) first = newfile;
-		else if (newfile == first) goto newfile;
-
 		STAILQ_REMOVE_HEAD(&freefiles, entries);
 
 		newid = newfile->fileid;
@@ -89,12 +83,6 @@ again:
 	}
 
 	asprintf(&newpath, "%s/%llu", CHROOT MESSAGES, newid);
-
-	if (access(newpath, F_OK) == 0) {
-		STAILQ_INSERT_TAIL(&freefiles, newfile, entries);
-		goto again;
-	}
-
 end:
 	return newpath;
 }
@@ -105,7 +93,6 @@ msgfile_releasepath(char *oldpath)
 	struct msgfile	*freefile;
 	uint64_t	 oldid;
 
-	log_writex(LOGTYPE_DEBUG, "oldpath = %s", oldpath);
 	if (sscanf(oldpath, CHROOT MESSAGES "/%llu", &oldid) != 1)
 		log_fatalx("msgfile_free: sscanf on %s failed to extract file id");
 
@@ -129,7 +116,7 @@ netmsg_new(uint8_t opcode)
 
 	int		 diskmsg = 0;
 	int		 flags = O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC;
-	mode_t		 mode = S_IRUSR | S_IRGRP;
+	mode_t		 mode = S_IRUSR | S_IWUSR | S_IRGRP;
 
 	switch (opcode) {
 	case NETOP_WRITE:
@@ -169,7 +156,6 @@ netmsg_new(uint8_t opcode)
 	out->opcode = opcode;
 	out->descriptor = descriptor;
 	out->path = path;
-	out->persist = 0;
 
 	if (diskmsg) {
 		out->closestorage = close;
@@ -199,7 +185,6 @@ end:
 
 		if (path != NULL) {
 			unlink(path);
-			log_writex(LOGTYPE_DEBUG, "culprit: _new");
 			msgfile_releasepath(path);
 		}
 	}
@@ -208,15 +193,11 @@ end:
 }
 
 struct netmsg *
-netmsg_takeownership(char *path)
+netmsg_loadweakly(char *path)
 {
 	struct netmsg	*out = NULL;
 	int		 loadfd;
 	uint8_t		 opcode;
-	char		*pathcopy;
-
-	pathcopy = strdup(path);
-	if (pathcopy == NULL) goto end;
 
 	loadfd = open(path, O_RDONLY);
 	if (loadfd < 0) goto end;
@@ -231,8 +212,6 @@ netmsg_takeownership(char *path)
 
 	out->opcode = opcode;
 	out->descriptor = loadfd;
-	out->path = pathcopy;
-	out->persist = -1;
 
 	out->closestorage = close;
 	out->readstorage = read;
@@ -241,48 +220,34 @@ netmsg_takeownership(char *path)
 	out->truncatestorage = ftruncate;
 
 end:
-	if (out == NULL) {
+	if (out == NULL)
 		if (loadfd > 0) close(loadfd);
-
-		if (pathcopy != NULL) {
-			unlink(pathcopy);
-			log_writex(LOGTYPE_DEBUG, "culprit: takeownership");
-			msgfile_releasepath(pathcopy);
-			free(pathcopy);
-		}
-	}
 
 	return out;
 }
 
 void
-netmsg_persistfile(struct netmsg *m)
+netmsg_retain(struct netmsg *m)
 {
-	m->persist = 1;
+	m->retain++;
 }
-
 
 void
 netmsg_teardown(struct netmsg *m)
 {
-	m->closestorage(m->descriptor);
+	if (m->retain > 0)
+		m->retain--;
 
-	if (m->path != NULL) {
-		switch (m->persist) {
-		case 1:
-			msgfile_releasepath(m->path);
-			break;
-		case 0:
+	else {
+		m->closestorage(m->descriptor);
+
+		if (m->path != NULL) {
 			unlink(m->path);
 			msgfile_releasepath(m->path);
-			break;
-		case -1:
-			unlink(m->path);
-			break;
 		}
-	}
 
-	free(m);
+		free(m);
+	}
 }
 
 const char *

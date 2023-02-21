@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+#include <dirent.h>
 #include <err.h>
 #include <event.h>
 #include <stdio.h>
@@ -15,6 +16,8 @@
 
 __dead static void	parent_signal(int, short, void *);
 __dead static void	usage(void);
+
+static void		empty_directory(char *);
 
 int	debug = 0;
 int	verbose = 0;
@@ -35,6 +38,29 @@ usage(void)
 {
 	fprintf(stderr, "usage: %s [-dhv]\n", __progname);
 	exit(1);
+}
+
+static void
+empty_directory(char *dir)
+{
+	struct dirent	*dp;
+	DIR		*dirp;	
+
+	dirp = opendir(dir);
+	if (dirp == NULL)
+		log_fatal("empty_directory: open directory %s", dir);
+
+	while ((dp = readdir(dirp)) != NULL) {
+		char *fpath;
+
+		if (asprintf(&fpath, "%s/%s", dir, dp->d_name) < 0)
+			log_fatal("empty_directory: asprintf");
+
+		unlink(fpath);
+		free(fpath);
+	}
+
+	closedir(dirp);
 }
 
 int
@@ -63,6 +89,10 @@ main(int argc, char *argv[])
 	if (argc > 0) usage();
 	else if (geteuid() != 0) errx(1, "need root privileges");
 
+	empty_directory(CHROOT ARCHIVES);
+	empty_directory(CHROOT SIGNATURES);
+	empty_directory(CHROOT MESSAGES);
+
 	parent = proc_new(PROC_ROOT);
 	if (parent == NULL) err(1, "proc_new -> parent process");
 
@@ -78,9 +108,14 @@ main(int argc, char *argv[])
 	frontend = proc_new(PROC_FRONTEND);
 	if (frontend == NULL) err(1, "proc_new -> frontend process");
 
+	proc_handlesigev(frontend, SIGEV_INT, frontend_signal);
+	proc_handlesigev(frontend, SIGEV_TERM, frontend_signal);
+
 	engine = proc_new(PROC_ENGINE);
 	if (engine == NULL) err(1, "proc_new -> engine process");
 
+	proc_handlesigev(engine, SIGEV_INT, engine_signal);
+	proc_handlesigev(engine, SIGEV_TERM, engine_signal);
 	proc_setchroot(engine, CHROOT);
 	proc_setuser(engine, USER);
 
