@@ -1,3 +1,4 @@
+from archive import *
 from conf import *
 from connection import *
 from message import *
@@ -42,10 +43,23 @@ if response == MESSAGE_INCOMPLETE:
 elif response.opcode() != MessageOp.BUNDLE:
 	raise ValueError(f"received non-bundle opcode {response.opcode()}")
 
-f = open("1.bundle", 'wb')
-f.write(response.file())
-f.close()
+archive = Archive.from_bytes(response.file())
+filenames = archive.all_filenames()
 
-subprocess.run(["hexdump", "-C", "1.bundle"])
+if len(filenames) != 3:
+	raise ValueError(f"archive has {len(filenames)} != 3 files in it")
 
-os.unlink("1.bundle")
+for testfile in testfiles:
+	filenamestr = testfile.decode("ascii")
+	file = archive.get_file_by_name(filenamestr)
+
+	print(f"reviewing {filenamestr}")
+
+	if file is None:
+		raise ValueError(f"test file {filenamestr} didn't make it into archive")
+
+	expected_content = testfiles[testfile]
+	real_content = file.uncompressed_content()
+
+	if expected_content != real_content:
+		raise ValueError(f"{filenamstr}: expected {expected_content}, got {real_content}")

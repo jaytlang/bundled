@@ -86,6 +86,10 @@ archivefile_new(char *name, size_t offset)
 	if (strlen(name) > MAXNAMESIZE) {
 		errno = ENAMETOOLONG;
 		log_fatal("archivefile_new: name length check");
+
+	} else if (strlen(name) == 0) {
+		errno = EINVAL;
+		log_fatal("archivefile_new: empty name passed");
 	}
 
 	out = calloc(1, sizeof(struct archivefile));
@@ -260,11 +264,16 @@ archive_readfileinfo(struct archive *a, uint16_t *labelsize, char *label,
 
 	/* XXX: Need to integrity check this here, because we are
 	 * called by archive_isvalid, and there's a memcpy below that
-	 * would break if we got a bogus large label size
+	 * would break if we got a bogus label size
 	 */
 
 	if (labelsizecopy > MAXNAMESIZE) {
 		errno = ENAMETOOLONG;
+		hdrcount = -1;
+		goto end;
+
+	} else if (labelsizecopy == 0) {
+		errno = EINVAL;
 		hdrcount = -1;
 		goto end;
 	}
@@ -550,7 +559,12 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	} else if (strlen(fname) > MAXNAMESIZE) {
 		archive_recorderror(a, "fname passed (size %lu) too large", strlen(fname));
 		goto end;
+
+	} else if (strlen(fname) == 0) {
+		archive_recorderror(a, "tried to create file with empty name");
+		goto end;
 	}
+
 
 	if (archive_hasfile(a, fname)) {
 		archive_recorderror(a, "filename passed already in archive");
@@ -604,6 +618,10 @@ archive_hasfile(struct archive *a, char *fname)
 	if (strlen(fname) > MAXNAMESIZE) {
 		archive_recorderror(a, "fname passed (size %lu) too large", strlen(fname));
 		goto end;
+
+	} else if (strlen(fname) == 0) {
+		archive_recorderror(a, "checked for presence of empty filename");
+		goto end;
 	}
 
 	dummy.name = fname;
@@ -625,7 +643,12 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 	if (strlen(fname) > MAXNAMESIZE) {
 		archive_recorderror(a, "fname passed (size %lu) too large", strlen(fname));
 		goto end;
+
+	} else if (strlen(fname) == 0) {
+		archive_recorderror(a, "tried to load empty filename", strlen(fname));
+		goto end;
 	}
+
 
 	dummy.name = fname;
 	found = RB_FIND(archivecache, &a->cachedfiles, &dummy);
@@ -814,6 +837,9 @@ archive_isvalid(struct archive *a)
 		/* XXX: this is already checked for, but let's pretend we don't know that */
 		if (labelsize > MAXNAMESIZE) {
 			archive_recorderror(a, "file label (length %u) too long", labelsize);
+			goto end;
+		} else if (labelsize == 0) {
+			archive_recorderror(a, "file label has zero length");
 			goto end;
 		}
 
