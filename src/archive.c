@@ -395,10 +395,8 @@ archive_new(uint32_t key)
 	int		 flags = O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC;
 	mode_t		 mode = S_IRUSR | S_IWUSR | S_IRGRP;
 
-	if (archive_fromkey(key) != NULL) {
-		errno = EALREADY;
-		goto end;
-	}
+	if (archive_fromkey(key) != NULL)
+		log_fatalx("archive_new: tried to create two archives w/ same key");
 
 	newpath = archive_keytopath(key);
 	newfd = open(newpath, flags, mode);
@@ -428,15 +426,6 @@ archive_new(uint32_t key)
 
 	out = a;
 	RB_INSERT(archivetree, &activearchives, out);
-end:
-	if (newfd > 0 && out == NULL) {
-		close(newfd);
-		if (unlink(newpath) < 0)
-			log_fatal("archive_new: unlink");
-	}
-
-	if (newpath != NULL && out == NULL)
-		free(newpath);
 
 	return out;
 }

@@ -11,7 +11,7 @@ conn = Connection([server_ca, client_ca], client_cert, client_key)
 conn.connect(server_hostname, server_port)
 
 print(f"uploading testfile")
-message = Message(MessageOp.WRITE, label=b"testfile", file=b"f" * (max_file_size + 1))
+message = Message(MessageOp.WRITE, label=b"t" * (max_name_size * 2), file=b"weeeeeeeee")
 conn.write_bytes(message.to_bytes())
 
 to = Timeout(1)

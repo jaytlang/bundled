@@ -3,6 +3,7 @@ TESTDIRS!=	find . -type d -name "t_*"
 
 .PHONY: build_all clean_all
 build_all:
+	make -C ../src clean
 .for TESTDIR in ${TESTDIRS}
 	make -C ${TESTDIR}
 .endfor

@@ -46,8 +46,8 @@ afterinstall:
 	${INSTALL} -o root -g wheel -m 444 ${CA} ${DESTDIR}/etc/ssl/authority;	\
 	${INSTALL} -o root -g wheel -m 444 ${CERT} ${DESTDIR}/etc/ssl;		\
 	${INSTALL} -o root -g wheel -m 400 ${KEY} ${DESTDIR}/etc/ssl/private;	\
-	${INSTALL} -o root -g wheel -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
-	${INSTALL} -o root -g wheel -m 600 ${SSEC} ${DESTDIR}/etc/signify
+	${INSTALL} -o root -g _imaged -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
+	${INSTALL} -o root -g _imaged -m 640 ${SSEC} ${DESTDIR}/etc/signify
 	sh scripts/rehash.sh /etc/ssl/authority
 
 .PHONY: uninstall reinstall

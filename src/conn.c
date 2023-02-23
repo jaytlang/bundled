@@ -284,15 +284,25 @@ conn_doreceive(int fd, short event, void *arg)
 
 		thispacketsize = tls_read(c->tls_context, receivebuf + receivesize, CONN_MTU);
 		if (thispacketsize == -1 || thispacketsize == 0) {
+			log_writex(LOGTYPE_DEBUG, "client eof it seems");
 			willteardown = 1;
 			break;	
-		} else if (thispacketsize == TLS_WANT_POLLIN || thispacketsize == TLS_WANT_POLLOUT)
+		} else if (thispacketsize == TLS_WANT_POLLIN || thispacketsize == TLS_WANT_POLLOUT) {
+			log_writex(LOGTYPE_DEBUG, "waiting for poll");
 			break;
+		}
 
 		receivesize += thispacketsize;
 	}
 
 	if (receivesize > 0) {
+
+		/* first, reboot the connection so that if our client doesn't
+		 * turn off reception (e.g. to flight an engine request), timeouts
+		 * will occur appropriately
+		 */
+		conn_stopreceiving(c);
+		conn_receive(c, c->cb_receive);
 
 		if (c->incoming_message == NULL) {
 			uint8_t	opcode;
@@ -302,8 +312,11 @@ conn_doreceive(int fd, short event, void *arg)
 	
 			/* invalid argument -> bad opcode */
 			if (c->incoming_message == NULL) {
-				if (errno == EINVAL) c->cb_receive(c, NULL);
-				else log_fatal("conn_doreceive: netmsg_new");
+				if (errno == EINVAL) {
+					c->cb_receive(c, NULL);
+					goto end;
+
+				} else log_fatal("conn_doreceive: netmsg_new");
 			}
 		}
 	
@@ -331,7 +344,8 @@ conn_doreceive(int fd, short event, void *arg)
 			c->incoming_message = NULL;
 		}
 	}
-	
+
+end:	
 	free(receivebuf);
 	if (willteardown)
 		conn_teardown(c);
@@ -401,6 +415,9 @@ conn_teardown(struct conn *c)
 
 	RB_REMOVE(conntree, &allcons, c);
 
+	if (c->incoming_message != NULL)
+		netmsg_teardown(c->incoming_message);
+
 	msgqueue_teardown(c->outgoing);
 
 	conn_stopreceiving(c);
@@ -411,6 +428,8 @@ conn_teardown(struct conn *c)
 
 	tls_free(c->tls_context);
 	free(c);
+
+	log_writex(LOGTYPE_DEBUG, "tore down connection");
 }
 
 void

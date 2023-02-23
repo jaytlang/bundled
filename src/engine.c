@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+#include <errno.h>
 #include <event.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -58,27 +59,45 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 		break;
 
 	case IMSG_ADDFILE:
+		/* XXX: races with netmsg_teardown in frontend on an unlink
+		 * if netmsg_loadweakly fails to win the race, throw engine error
+		 * and have the frontend intercept it silently -- activeconn in the
+		 * frontend will be null at this point so should be okay
+		 */
 		weakmsg = netmsg_loadweakly(relmsgfile);
-		if (weakmsg == NULL) log_fatal("proc_getmsg: netmsg_loadweakly");
+		if (weakmsg == NULL) {
+			if (errno == ENOENT) {
+				engine_replytofrontend(IMSG_ENGINEERROR, key, strerror(errno));
+				break;
+			}
+
+			log_fatal("proc_getmsg: netmsg_loadweakly");
+		}
 
 		fname = netmsg_getlabel(weakmsg);	
 		if (fname == NULL)
-			log_fatal("proc_getmsg: netmsg_getlabel: %s",
+			log_fatalx("proc_getmsg: netmsg_getlabel: %s",
 				netmsg_error(weakmsg));
 
 		fdata = netmsg_getdata(weakmsg, &fdatasize);
 		if (fdata == NULL)
-			log_fatal("proc_getmsg: netmsg_getdata: %s",
+			log_fatalx("proc_getmsg: netmsg_getdata: %s",
 				netmsg_error(weakmsg));
 
-		if (archive_addfile(archive, fname, fdata, (size_t)fdatasize) < 0)
-			log_fatal("proc_getmsg: archive_addfile: %s", archive_error(archive));
+		if (archive_addfile(archive, fname, fdata, (size_t)fdatasize) < 0) {
+			char *error;
+
+			error = archive_error(archive);
+			engine_replytofrontend(IMSG_ENGINEERROR, key, error);
+			free(error);
+
+		} else engine_replytofrontend(IMSG_ADDFILEACK, key, NULL);
+		
 
 		free(fname);
 		free(fdata);
 		netmsg_teardown(weakmsg);
 
-		engine_replytofrontend(IMSG_ADDFILEACK, key, NULL);
 		break;
 
 	case IMSG_PLEASESIGN:

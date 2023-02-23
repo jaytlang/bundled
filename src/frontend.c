@@ -134,6 +134,7 @@ activeconn_handleteardown(struct conn *c)
 	RB_REMOVE(activeptrtree, &connsbyptr, ac);
 
 	ac->c = NULL;
+	ac->shouldheartbeat = 0;
 
 	if (ac->pendingmsg != NULL) {
 		log_writex(LOGTYPE_WARN, "tearing down pending message for peer %s", ac->peer);
@@ -151,9 +152,6 @@ activeconn_bykey(uint32_t key)
 
 	dummy.backendkey = key;
 	out = RB_FIND(activekeytree, &connsbykey, &dummy);
-
-	if (out == NULL)
-		log_fatal("activeconn_bykey: no such key %u", key);
 
 	return out;
 }
@@ -214,6 +212,7 @@ activeconn_errortoclient(struct activeconn *ac, const char *fmt, ...)
 		log_fatalx("activeconn_errortoclient: netmsg_setlabel: %s", netmsg_error(response));
 
 	conn_send(ac->c, response);
+	log_writex(LOGTYPE_DEBUG, "sent error to cilent");
 
 	free(label);
 	va_end(ap);
@@ -325,8 +324,10 @@ conn_timeout(struct conn *c)
 	struct netmsg		*heartbeat;
 
 	ac = activeconn_byptr(c);
-	if (ac->shouldheartbeat) conn_teardown(ac->c);
-	else {
+	if (ac->shouldheartbeat) {
+		log_writex(LOGTYPE_DEBUG, "heartbeat timeout");
+		conn_teardown(ac->c);
+	} else {
 		ac->shouldheartbeat = 1;
 
 		heartbeat = netmsg_new(NETOP_HEARTBEAT);
@@ -347,6 +348,7 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 	char			*msgpath;
 
 	ac = activeconn_byptr(c);
+	ac->shouldheartbeat = 0;
 
 	if (m == NULL || strlen(netmsg_error(m)) > 0) {
 
@@ -362,6 +364,8 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 		
 		activeconn_errortoclient(ac, "received bad message: %s",
 			(m == NULL) ? "unintelligble" : netmsg_error(m));
+
+		return;
 	}
 
 	switch (netmsg_gettype(m)) {
@@ -381,7 +385,6 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 		break;
 
 	case NETOP_HEARTBEAT:
-		ac->shouldheartbeat = 0;
 		break;
 
 	default:
@@ -399,14 +402,22 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 {
 	struct netmsg		*response;	
 	struct activeconn	*ac;
-	char			*archivepath;
+	char			*archivepath, *error;
 
 	ac = activeconn_bykey(ipcmsg_getkey(msg));
+
+	if (ac == NULL) {
+		if (type == IMSG_ENGINEERROR) {
+			log_writex(LOGTYPE_DEBUG, "teardown race observed");
+			return;
+		}
+
+		log_fatalx("proc_getmsg: received engine reply for null connection");
+	}
 
 	switch (type) {
 
 	case IMSG_NEWARCHIVEACK:
-		conn_receive(ac->c, conn_getmsg);
 		break;
 
 	case IMSG_ADDFILEACK:
@@ -417,23 +428,35 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 		ac->pendingmsg = NULL;
 
 		conn_send(ac->c, response);
-		conn_receive(ac->c, conn_getmsg);
 		break;
 
 	case IMSG_SIGNEDBUNDLE:
 		archivepath = ipcmsg_getmsg(msg);
 
 		response = conn_makemsgfromarchive(archivepath);
-
 		conn_send(ac->c, response);
-		conn_receive(ac->c, conn_getmsg);
 
 		free(archivepath);
+		break;
+
+	case IMSG_ENGINEERROR:
+		error = ipcmsg_getmsg(msg);	
+
+		activeconn_errortoclient(ac, "%s", error);
+		free(error);
+
+		if (ac->pendingmsg != NULL) {
+			netmsg_teardown(ac->pendingmsg);
+			ac->pendingmsg = NULL;
+		}
+
 		break;
 
 	default:
 		log_fatalx("proc_getmsg: unexpected message type %d from engine", type);
 	}
+
+	conn_receive(ac->c, conn_getmsg);
 
 	(void)fd;
 }

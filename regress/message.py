@@ -17,6 +17,7 @@ MESSAGE_INCOMPLETE = -69
 class MessageField:
 	def __init__(self, content):
 		self._bytes = content
+		self._length_override = None
 
 	@classmethod
 	def from_bytes(cls, bytes):
@@ -31,6 +32,9 @@ class MessageField:
 
 	def content(self): return self._bytes
 
+	def set_length_override(self, override):
+		self._length_override = override
+
 	def to_ascii(self):
 		return self._bytes.decode(encoding="ascii")
 
@@ -38,7 +42,11 @@ class MessageField:
 		return len(self._bytes) + 8
 
 	def to_bytes(self): 
-		length_bytes = len(self._bytes).to_bytes(8, "big")
+		if self._length_override is not None:
+			length_bytes = self._length_override.to_bytes(8, "big")
+		else: 
+			length_bytes = len(self._bytes).to_bytes(8, "big")
+
 		return length_bytes + self._bytes
 
 class Message:
@@ -96,6 +104,18 @@ class Message:
 			return cls(opcode, label=label.content(), file=file.content())
 
 		except IndexError: return MESSAGE_INCOMPLETE
+
+	def set_label_length_override(self, override):
+		if self._label is None:
+			raise ValueError("cannot override length on non-existent label")
+
+		self._label.set_length_override(override)
+
+	def set_file_length_override(self, override):
+		if self._file is None:
+			raise ValueError("cannot override length on non-existent file")
+
+		self._file.set_length_override(override)
 
 	def to_bytes(self):
 		msg = int(self._opcode).to_bytes(1, "big")

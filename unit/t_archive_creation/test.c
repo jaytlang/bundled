@@ -11,13 +11,10 @@ int		debug = 1, verbose = 1;
 int
 main()
 {
-	struct archive *a, *b;
+	struct archive *a;
 
 	a = archive_new(key);
 	if (a == NULL) err(1, "archive_new");
-
-	b = archive_new(key);
-	if (b != NULL) errx(1, "created two archives with the same key");
 
 	if (archive_fromkey(key) != a) err(1, "unable to find newly created archive");
 

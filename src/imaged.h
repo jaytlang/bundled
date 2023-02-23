@@ -131,9 +131,11 @@ int		 netmsg_isvalid(struct netmsg *, int *);
 
 #define IMSG_NEWARCHIVEACK	6
 #define IMSG_ADDFILEACK		7
-#define IMSG_SIGNEDBUNDLE	8
+#define IMSG_SIGNEDBUNDLE	9
 
-#define IMSG_MAX                9
+#define IMSG_ENGINEERROR	8
+
+#define IMSG_MAX                10
 
 struct proc;
 
@@ -231,5 +233,18 @@ char		*archive_error(struct archive *);
 int		 archive_isvalid(struct archive *);
 
 char		*archive_getpath(struct archive *);
+
+/* crypto.c */
+
+#define CRYPTO_SIGNIFY		"/usr/bin/signify"
+
+#define CRYPTO_PUBKEY		"/etc/signify/imaged.pub"
+#define CRYPTO_SECKEY		"/etc/signify/imaged.sec"
+
+#define CRYPTO_SIGNATUREIN	CHROOT "/signatures/crc32.bin"
+#define CRYPTO_SIGNATUREOUT	CHROOT "/signatures/crc32.sig"
+
+char		*crypto_takesignature(struct archive *);
+int		 crypto_verifysignature(struct archive *);
 
 #endif /* IMAGED_H */
