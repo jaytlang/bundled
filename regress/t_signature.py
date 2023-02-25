@@ -31,6 +31,18 @@ for fname in testfiles:
 	elif response.opcode() != MessageOp.ACK:
 		raise ValueError(f"received non-ack opcode {response.opcode()}")
 
+message = Message(MessageOp.SIGN)
+conn.write_bytes(message.to_bytes())
+
+to = Timeout(1)
+response = Message.from_conn(conn)
+to.cancel()
+
+if response == MESSAGE_INCOMPLETE:
+	raise ValueError("received incomplete response")
+elif response.opcode() != MessageOp.ACK:
+	raise ValueError(f"received non-bundle opcode {response.opcode()}")
+
 message = Message(MessageOp.GETBUNDLE)
 conn.write_bytes(message.to_bytes())
 
@@ -42,7 +54,6 @@ if response == MESSAGE_INCOMPLETE:
 	raise ValueError("received incomplete response")
 elif response.opcode() != MessageOp.BUNDLE:
 	raise ValueError(f"received non-bundle opcode {response.opcode()}")
-
 
 # testing things
 with open("out.bundle", 'wb') as f:
@@ -73,3 +84,5 @@ for testfile in testfiles:
 		raise ValueError(f"{filenamstr}: expected {expected_content}, got {real_content}")
 
 
+if not archive.signature_is_okay():
+	raise ValueError("invalid signature")

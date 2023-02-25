@@ -159,7 +159,6 @@ proc_poststartsetup(char *ident)
 		case SIGEV_HUP: signalcode = SIGHUP; break;
 		case SIGEV_INT: signalcode = SIGINT; break;
 		case SIGEV_TERM: signalcode = SIGTERM; break;
-		case SIGEV_CHLD: signalcode = SIGCHLD; break;
 		}
 
 		if (p->sigcbs[i] != NULL) {
@@ -202,7 +201,7 @@ proc_startall(struct proc *parentproc, struct proc *frontendproc, struct proc *e
 	/* mail to the frontend */
 
 	msgstatus = imsg_compose(&p->ibufs[PROC_FRONTEND], IMSG_INITFD, PROC_FRONTEND,
-		PROC_ROOT, childtochild[0], marshalledmsg, marshalledmsgsize);
+		PROC_PARENT, childtochild[0], marshalledmsg, marshalledmsgsize);
 
 	if (msgstatus != 1) log_fatal("imsg_compose for sendfd");
 
@@ -212,7 +211,7 @@ proc_startall(struct proc *parentproc, struct proc *frontendproc, struct proc *e
 	/* mail to the engine */
 
 	msgstatus = imsg_compose(&p->ibufs[PROC_ENGINE], IMSG_INITFD, PROC_ENGINE,
-		PROC_ROOT, childtochild[1], marshalledmsg, marshalledmsgsize);
+		PROC_PARENT, childtochild[1], marshalledmsg, marshalledmsgsize);
 
 	if (msgstatus != 1) log_fatal("imsg_compose for sendfd");
 
@@ -237,7 +236,7 @@ proc_startcrosstalk(int type, int fd, struct ipcmsg *data)
 	origin = (p->mytype == PROC_FRONTEND) ? PROC_ENGINE : PROC_FRONTEND;
 	imsg_init(&p->ibufs[origin], fd);
 
-	myproc_stoplisten(PROC_ROOT);
+	myproc_stoplisten(PROC_PARENT);
 	event_loopbreak();
 
 	(void)fd;
@@ -249,8 +248,8 @@ proc_childstart(int parentfd, void (*launch)(void))
 {
 	event_init();
 
-	imsg_init(&p->ibufs[PROC_ROOT], parentfd);
-	myproc_listen(PROC_ROOT, proc_startcrosstalk);
+	imsg_init(&p->ibufs[PROC_PARENT], parentfd);
+	myproc_listen(PROC_PARENT, proc_startcrosstalk);
 
 	event_dispatch();
 
@@ -358,6 +357,7 @@ proc_dorecv(int fd, short event, void *arg)
 
 		if (data == NULL) log_fatal("ipcmsg_unmarshal");
 
+		log_writex(LOGTYPE_DEBUG, "message (type %d) %d -> %d", imsg.hdr.type, source, p->mytype);
 		p->readcbs[source]((int)imsg.hdr.type, imsg.fd, data);
 
 		ipcmsg_teardown(data);

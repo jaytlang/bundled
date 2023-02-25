@@ -10,6 +10,7 @@
 #include <event.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "imaged.h"
@@ -19,16 +20,19 @@ __dead static void	usage(void);
 
 static void		empty_directory(char *);
 
+static void		parent_replytoengine(int, uint32_t, char *);
+static void		proc_getmsg(int, int, struct ipcmsg *);
+
+
 int	debug = 0;
 int	verbose = 0;
 
 __dead static void
 parent_signal(int signal, short event, void *arg)
 {
-	log_writex(LOGTYPE_WARN, "clean shutdown");
+	log_writex(LOGTYPE_WARN, "clean shutdown (signal %d)", signal);
 	exit(0);
 
-	(void)signal;
 	(void)event;
 	(void)arg;
 }
@@ -53,14 +57,70 @@ empty_directory(char *dir)
 	while ((dp = readdir(dirp)) != NULL) {
 		char *fpath;
 
+		if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
+			continue;
+
 		if (asprintf(&fpath, "%s/%s", dir, dp->d_name) < 0)
 			log_fatal("empty_directory: asprintf");
 
-		unlink(fpath);
+		if (unlink(fpath) < 0)
+			log_fatal("empty_directory: unlink %s", fpath);
+
 		free(fpath);
 	}
 
 	closedir(dirp);
+}
+
+static void
+parent_replytoengine(int type, uint32_t key, char *data)
+{
+	struct ipcmsg	*response;
+
+	response = ipcmsg_new(key, data);
+	if (response == NULL) log_fatal("parent_replytoengine: ipcmsg_new");
+
+	myproc_send(PROC_ENGINE, type, -1, response);
+	ipcmsg_teardown(response);
+}
+
+static void
+proc_getmsg(int type, int fd, struct ipcmsg *msg)
+{
+	struct archive	*tosign;
+
+	char		*msgfile, *absmsgfile, *signature;
+	uint32_t	 key;
+
+	msgfile = ipcmsg_getmsg(msg);
+	key = ipcmsg_getkey(msg);
+	log_writex(LOGTYPE_DEBUG, "signature request received for %s", msgfile);
+
+	if (type != IMSG_SIGNARCHIVE)
+		log_fatalx("proc_getmsg: unknown message type received from frontend: %d", type);
+
+	if (asprintf(&absmsgfile, "%s%s", CHROOT, msgfile) < 0)
+		log_fatal("proc_getmsg: asprintf");
+
+	/* XXX: race. if the client disconnects, the engine could delete an archive out
+	 * from under us. if this happens, we will fail silently. if the archive is deleted
+	 * after the below line, but before the engine replies to the frontend, we should wind
+	 * up receiving a signature for a non-existent key, and can silently discard it
+	 */
+	if ((tosign = archive_fromfile(key, absmsgfile)) == NULL) goto end;
+
+	signature = crypto_takesignature(tosign);
+	parent_replytoengine(IMSG_SIGNATURE, key, signature);
+	log_writex(LOGTYPE_DEBUG, "signature reply sent");
+
+	archive_teardown(tosign);
+	free(signature);
+
+end:
+	free(absmsgfile);
+	free(msgfile);
+
+	(void)fd;
 }
 
 int
@@ -93,13 +153,11 @@ main(int argc, char *argv[])
 	empty_directory(CHROOT SIGNATURES);
 	empty_directory(CHROOT MESSAGES);
 
-	parent = proc_new(PROC_ROOT);
+	parent = proc_new(PROC_PARENT);
 	if (parent == NULL) err(1, "proc_new -> parent process");
 
 	proc_handlesigev(parent, SIGEV_INT, parent_signal);
 	proc_handlesigev(parent, SIGEV_TERM, parent_signal);
-	proc_handlesigev(parent, SIGEV_CHLD, parent_signal);
-	proc_setchroot(parent, "/var/empty");
 	proc_setuser(parent, USER);
 
 	/* XXX: defer frontend privilege drop until after it launches,
@@ -128,10 +186,26 @@ main(int argc, char *argv[])
 	/* and fire the main engines */
 	proc_startall(parent, frontend, engine);
 
-	if (pledge("stdio", "") < 0)
+	log_writex(LOGTYPE_MSG, "startup");
+
+	if (unveil(CHROOT SIGNATURES, "rwc") < 0)
+		log_fatal("unveil " CHROOT SIGNATURES);
+
+	if (unveil(CHROOT ARCHIVES, "r") < 0)
+		log_fatal("unveil " CHROOT ARCHIVES);
+
+	if (unveil(CRYPTO_SIGNIFY, "x") < 0)
+		log_fatal("unveil " CRYPTO_SIGNIFY);
+
+	if (unveil("/usr/libexec/ld.so", "r") < 0)
+		log_fatal("unveil ld.so");
+
+	if (pledge("stdio rpath wpath cpath proc exec", NULL) < 0)
 		log_fatal("pledge");
 
-	log_writex(LOGTYPE_MSG, "startup");
+	myproc_listen(PROC_FRONTEND, nothing);
+	myproc_listen(PROC_ENGINE, proc_getmsg);
+
 	event_dispatch();
 
 	/* never hit */

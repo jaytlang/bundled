@@ -1,5 +1,7 @@
 from conf import *
 
+import os
+import subprocess
 import zlib
 
 minimum_archivefile_length = 10
@@ -116,6 +118,27 @@ class Archive:
 
 	def crc32(self): return self._crc32
 	def signature(self): return self._signature
+
+	def signature_is_okay(self):
+		crcbytes = self._crc32.to_bytes(4, "big")
+		crcfile = "/tmp/crc32.bin"
+		crcsig = "/tmp/crc32.sig"
+
+		with open(crcfile, "wb") as f:
+			f.write(crcbytes)
+
+		with open(crcsig, "w") as f:
+			f.write(self._signature)
+
+		completed = subprocess.run(["signify", "-V",
+				"-x", crcsig,
+				"-p", "/etc/signify/imaged.pub",
+				"-m", crcfile])
+
+		os.unlink(crcfile)
+		os.unlink(crcsig)
+
+		return completed.returncode == 0
 
 	def all_filenames(self):
 		names = []

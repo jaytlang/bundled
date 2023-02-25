@@ -5,6 +5,7 @@ BINDIR?=	/usr/sbin
 SRCS=	archive.c	\
 	buffer.c	\
 	conn.c		\
+	crypto.c	\
 	engine.c	\
 	frontend.c	\
 	imaged.c	\

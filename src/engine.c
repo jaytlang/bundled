@@ -14,8 +14,11 @@
 
 #include "imaged.h"
 
-static void	proc_getmsg(int, int, struct ipcmsg *);
 static void	engine_replytofrontend(int, uint32_t, char *);
+static void	engine_requestsignature(uint32_t, char *);
+
+static void	proc_getmsgfromfrontend(int, int, struct ipcmsg *);
+static void	proc_getmsgfromparent(int, int, struct ipcmsg *);
 
 static void
 engine_replytofrontend(int type, uint32_t key, char *data)
@@ -29,8 +32,20 @@ engine_replytofrontend(int type, uint32_t key, char *data)
 	ipcmsg_teardown(response);
 }
 
-void
-proc_getmsg(int type, int fd, struct ipcmsg *msg)
+static void
+engine_requestsignature(uint32_t key, char *path)
+{
+	struct ipcmsg	*request;
+
+	request = ipcmsg_new(key, path);
+	if (request == NULL) log_fatal("engine_requestsignature: ipcmsg_new");
+
+	myproc_send(PROC_PARENT, IMSG_SIGNARCHIVE, -1, request);
+	ipcmsg_teardown(request);
+}
+
+static void
+proc_getmsgfromfrontend(int type, int fd, struct ipcmsg *msg)
 {
 	struct netmsg	*weakmsg;
 	struct archive	*archive;
@@ -47,13 +62,13 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 	if (type != IMSG_NEWARCHIVE) {
 		archive = archive_fromkey(key);
 		if (archive == NULL)
-			log_fatal("proc_getmsg: archive_fromkey");
+			log_fatal("proc_getmsgfromfrontend: archive_fromkey");
 	}
 
 	switch (type) {
 	case IMSG_NEWARCHIVE:
 		if ((archive = archive_new(key)) == NULL)
-			log_fatal("proc_getmsg: archive_new");
+			log_fatal("proc_getmsgfromfrontend: archive_new");
 
 		engine_replytofrontend(IMSG_NEWARCHIVEACK, key, NULL);
 		break;
@@ -71,17 +86,17 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 				break;
 			}
 
-			log_fatal("proc_getmsg: netmsg_loadweakly");
+			log_fatal("proc_getmsgfromfrontend: netmsg_loadweakly");
 		}
 
 		fname = netmsg_getlabel(weakmsg);	
 		if (fname == NULL)
-			log_fatalx("proc_getmsg: netmsg_getlabel: %s",
+			log_fatalx("proc_getmsgfromfrontend: netmsg_getlabel: %s",
 				netmsg_error(weakmsg));
 
 		fdata = netmsg_getdata(weakmsg, &fdatasize);
 		if (fdata == NULL)
-			log_fatalx("proc_getmsg: netmsg_getdata: %s",
+			log_fatalx("proc_getmsgfromfrontend: netmsg_getdata: %s",
 				netmsg_error(weakmsg));
 
 		if (archive_addfile(archive, fname, fdata, (size_t)fdatasize) < 0) {
@@ -100,11 +115,18 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 
 		break;
 
-	case IMSG_PLEASESIGN:
+	case IMSG_WANTSIGN:
 		fname = archive_getpath(archive);
-		engine_replytofrontend(IMSG_SIGNEDBUNDLE, key, fname);
-
+		engine_requestsignature(key, fname);
 		free(fname);
+
+		break;
+
+	case IMSG_GETBUNDLE:
+		fname = archive_getpath(archive);
+		engine_replytofrontend(IMSG_BUNDLE, key, fname);
+		free(fname);
+
 		break;
 
 	case IMSG_KILLARCHIVE:
@@ -112,10 +134,36 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 		break;
 
 	default:
-		log_fatal("unknown message type received from frontend: %d", type);
+		log_fatalx("unknown message type received from frontend: %d", type);
 	}
 
 	free(msgfile);
+
+	(void)fd;
+}
+
+static void
+proc_getmsgfromparent(int type, int fd, struct ipcmsg *msg)
+{
+	struct archive	*archive;
+	char		*signature;
+	int	 	 key;
+
+	log_writex(LOGTYPE_DEBUG, "signature received from parent");
+	signature = ipcmsg_getmsg(msg);
+	key = ipcmsg_getkey(msg);
+
+	if (type != IMSG_SIGNATURE)
+		log_fatalx("unknown message type received from parent: %d", type);
+
+	/* XXX: race. see comment in imaged.c */
+	archive = archive_fromkey(key);
+	if (archive == NULL) goto end;
+
+	archive_writesignature(archive, signature);
+	engine_replytofrontend(IMSG_WANTSIGNACK, key, NULL);
+end:	
+	free(signature);
 
 	(void)fd;
 }
@@ -131,8 +179,8 @@ engine_launch(void)
 	if (pledge("stdio rpath wpath cpath", "") < 0)
 		log_fatal("pledge");
 
-	myproc_listen(PROC_ROOT, nothing);
-	myproc_listen(PROC_FRONTEND, proc_getmsg);
+	myproc_listen(PROC_PARENT, proc_getmsgfromparent);
+	myproc_listen(PROC_FRONTEND, proc_getmsgfromfrontend);
 
 	event_dispatch();
 	archive_teardownall();

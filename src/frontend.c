@@ -371,7 +371,7 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 	switch (netmsg_gettype(m)) {
 
 	case NETOP_SIGN:
-		activeconn_requesttoengine(ac, IMSG_PLEASESIGN, NULL);
+		activeconn_requesttoengine(ac, IMSG_WANTSIGN, NULL);
 		break;
 
 	case NETOP_WRITE:
@@ -382,6 +382,10 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 		activeconn_requesttoengine(ac, IMSG_ADDFILE, msgpath);
 
 		free(msgpath);
+		break;
+
+	case NETOP_GETBUNDLE:
+		activeconn_requesttoengine(ac, IMSG_GETBUNDLE, NULL);
 		break;
 
 	case NETOP_HEARTBEAT:
@@ -430,7 +434,14 @@ proc_getmsg(int type, int fd, struct ipcmsg *msg)
 		conn_send(ac->c, response);
 		break;
 
-	case IMSG_SIGNEDBUNDLE:
+	case IMSG_WANTSIGNACK:
+		response = netmsg_new(NETOP_ACK);
+		if (response == NULL) log_fatal("proc_getmsg: netmsg_new");
+
+		conn_send(ac->c, response);
+		break;
+
+	case IMSG_BUNDLE:
 		archivepath = ipcmsg_getmsg(msg);
 
 		response = conn_makemsgfromarchive(archivepath);
@@ -491,7 +502,7 @@ frontend_launch(void)
 	if (pledge("stdio rpath wpath cpath inet", "") < 0)
 		log_fatal("pledge");
 
-	myproc_listen(PROC_ROOT, nothing);
+	myproc_listen(PROC_PARENT, nothing);
 	myproc_listen(PROC_ENGINE, proc_getmsg);
 
 	event_dispatch();

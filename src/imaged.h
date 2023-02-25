@@ -22,7 +22,7 @@
 
 #define MAXNAMESIZE	1024
 #define MAXFILESIZE	10485760
-#define MAXSIGSIZE	512
+#define MAXSIGSIZE	177
 
 #define	ERRSTRSIZE	500
 #define BLOCKSIZE	1048576
@@ -77,11 +77,15 @@ struct netmsg;
 #define NETOP_UNUSED	0
 #define NETOP_SIGN	1
 #define NETOP_WRITE	2
-#define NETOP_BUNDLE	3
+#define NETOP_GETBUNDLE	3
+
 #define NETOP_HEARTBEAT	4
-#define NETOP_ACK	5
-#define NETOP_ERROR	6
-#define NETOP_MAX	7
+
+#define NETOP_BUNDLE	5
+#define NETOP_ACK	6
+#define NETOP_ERROR	7
+
+#define NETOP_MAX	8
 
 struct netmsg	*netmsg_new(uint8_t);
 struct netmsg	*netmsg_loadweakly(char *);
@@ -110,32 +114,35 @@ int		 netmsg_isvalid(struct netmsg *, int *);
 
 /* proc.c */
 
-#define PROC_ROOT       0
-#define PROC_FRONTEND   1
-#define PROC_ENGINE     2
-#define PROC_MAX        3
+#define PROC_PARENT	0
+#define PROC_FRONTEND  	1
+#define PROC_ENGINE   	2
+#define PROC_MAX      	3
 
 #define SIGEV_HUP       0
 #define SIGEV_INT       1
 #define SIGEV_TERM      2
-#define SIGEV_CHLD      3
-#define SIGEV_MAX       4
+#define SIGEV_MAX       3
 
 #define IMSG_HELLO              0
 #define IMSG_INITFD             1
 
 #define IMSG_NEWARCHIVE		2
 #define IMSG_ADDFILE		3
-#define IMSG_PLEASESIGN		4
-#define IMSG_KILLARCHIVE	5
+#define IMSG_WANTSIGN		4
+#define IMSG_GETBUNDLE		5
+#define IMSG_KILLARCHIVE	6
 
-#define IMSG_NEWARCHIVEACK	6
-#define IMSG_ADDFILEACK		7
-#define IMSG_SIGNEDBUNDLE	9
+#define IMSG_NEWARCHIVEACK	7
+#define IMSG_ADDFILEACK		8
+#define IMSG_WANTSIGNACK	9
+#define IMSG_BUNDLE		10
+#define IMSG_ENGINEERROR	11	
 
-#define IMSG_ENGINEERROR	8
+#define IMSG_SIGNARCHIVE	12
+#define IMSG_SIGNATURE		13
 
-#define IMSG_MAX                10
+#define IMSG_MAX                14
 
 struct proc;
 

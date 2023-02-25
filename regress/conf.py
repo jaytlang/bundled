@@ -7,8 +7,8 @@ server_hostname = "eecs-digital-53.mit.edu"
 server_port = 443
 
 # the below settings must match the running
-# daemon configuration.
-max_signature_size = 512
+# daemon configuration
+max_signature_size = 177
 max_file_size = 10485760
 max_name_size = 1024
 

@@ -139,6 +139,7 @@ netmsg_new(uint8_t opcode)
 		break;
 
 	case NETOP_SIGN:
+	case NETOP_GETBUNDLE:
 	case NETOP_HEARTBEAT:
 	case NETOP_ACK:
 	case NETOP_ERROR:
@@ -647,6 +648,7 @@ netmsg_isvalid(struct netmsg *m, int *fatal)
 		break;
 
 	case NETOP_SIGN:
+	case NETOP_GETBUNDLE:
 	case NETOP_HEARTBEAT:
 	case NETOP_ACK:
 		needlabel = 0;

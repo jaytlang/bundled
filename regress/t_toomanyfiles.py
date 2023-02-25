@@ -26,7 +26,7 @@ for i in range(max_archive_files + 3):
 	elif i < max_archive_files and response.opcode() != MessageOp.ACK:
 		raise ValueError(f"{i}: received non-ack opcode {response.opcode()}")
 
-message = Message(MessageOp.SIGN)
+message = Message(MessageOp.GETBUNDLE)
 conn.write_bytes(message.to_bytes())
 
 to = Timeout(1)

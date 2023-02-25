@@ -43,7 +43,7 @@ for fname in testfiles:
 			raise ValueError(f"received non-ack opcode {response.opcode()}")
 
 
-message = Message(MessageOp.SIGN)
+message = Message(MessageOp.GETBUNDLE)
 for conn in conns:
 	conn.write_bytes(message.to_bytes())
 

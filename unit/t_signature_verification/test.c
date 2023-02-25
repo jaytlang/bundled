@@ -32,7 +32,7 @@ main()
 		errx(1, "crypto_verifysignature: incorrect signature");
 
 	signature = crypto_takesignature(a);
-	signature[0] = 'A';
+	signature[strlen(signature) / 2] = 'A';
 	archive_writesignature(a, signature);
 
 	if (crypto_verifysignature(a) == 0)

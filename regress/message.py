@@ -7,10 +7,11 @@ from enum import IntEnum
 class MessageOp(IntEnum):
 	SIGN = 1
 	WRITE = 2
-	BUNDLE = 3
+	GETBUNDLE = 3
 	HEARTBEAT = 4
-	ACK = 5
-	ERROR = 6
+	BUNDLE = 5
+	ACK = 6
+	ERROR = 7
 
 MESSAGE_INCOMPLETE = -69
 
@@ -90,7 +91,7 @@ class Message:
 		except ValueError:
 			raise ValueError(f"invalid opcode {opcode} received")
 
-		if opcode in [MessageOp.SIGN, MessageOp.HEARTBEAT, MessageOp.ACK]:
+		if opcode in [MessageOp.SIGN, MessageOp.GETBUNDLE, MessageOp.HEARTBEAT, MessageOp.ACK]:
 			return cls(opcode)
 
 		try: label = MessageField.from_bytes(bytes[1:])
