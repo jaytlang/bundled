@@ -20,11 +20,11 @@
 
 #define SIGNATURES	"/signatures"
 
-#define MAXNAMESIZE	1024
-#define MAXFILESIZE	10485760
-#define MAXSIGSIZE	177
+#define MAXNAMESIZE	1024		/* uint64_t */
+#define MAXFILESIZE	10485760	/* uint64_t */
+#define MAXSIGSIZE	177		/* uint16_t */
 
-#define	ERRSTRSIZE	500
+#define	ERRSTRSIZE	2048
 #define BLOCKSIZE	1048576
 
 extern char *__progname;
