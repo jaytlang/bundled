@@ -588,7 +588,7 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	if (datasize > MAXFILESIZE) {
 		archive_recorderror(a, "adding the file %s to your archive failed, because "
 			"it is too large. your file is %lu bytes, but the maximum allowed "
-			"is %lu bytes", );
+			"is %lu bytes", MAXFILESIZE);
 		goto end;
 
 	} else if (strlen(fname) > MAXNAMESIZE) {
@@ -719,8 +719,7 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 	if (archive_readfileinfo(a, NULL, NULL, &rawdatasize, &compressedsize) < 0)
 		log_fatal("archive_loadfile: not able to pull file metadata off of "
 			"archive, perhaps due to data corruption or a malformed "
-			"archive that made it past validation. this is likely a bug. ");
-			"archive_readfileinfo returned");
+			"archive that made it past validation. this is likely a bug");
 
 	*datasizeout = (ssize_t)rawdatasize;
 

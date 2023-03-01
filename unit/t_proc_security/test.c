@@ -48,7 +48,7 @@ checksecurity(int type, int fd, struct ipcmsg *data)
 		response = ipcmsg_new(0, NULL);
 		if (response == NULL) err(1, "ipcmsg_new");
 
-		myproc_send(PROC_ROOT, IMSG_C2P, fd, response);
+		myproc_send(PROC_PARENT, IMSG_C2P, fd, response);
 		ipcmsg_teardown(response);
 	}
 
@@ -66,7 +66,7 @@ parent_ackchild(int type, int fd, struct ipcmsg *data)
 void
 frontend_launch(void)
 {
-	myproc_listen(PROC_ROOT, checksecurity);
+	myproc_listen(PROC_PARENT, checksecurity);
 	myproc_listen(PROC_ENGINE, nothing);
 
 	event_dispatch();
@@ -75,7 +75,7 @@ frontend_launch(void)
 void
 engine_launch(void)
 {
-	myproc_listen(PROC_ROOT, nothing);
+	myproc_listen(PROC_PARENT, nothing);
 	myproc_listen(PROC_FRONTEND, nothing);
 
 	event_dispatch();
@@ -87,7 +87,7 @@ main()
 	struct proc	*p, *f, *e;	
 	struct ipcmsg	*ping;
 
-	p = proc_new(PROC_ROOT);
+	p = proc_new(PROC_PARENT);
 	if (p == NULL) err(1, "proc_new -> parent process");
 
 	proc_setchroot(p, "/var/empty");

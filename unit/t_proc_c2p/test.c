@@ -38,7 +38,7 @@ child_msgreply(int type, int fd, struct ipcmsg *data)
 		errx(1, "child got incorrect message %s", message);
 
 	free(message);
-	myproc_send(PROC_ROOT, IMSG_HELLO, -1, data);
+	myproc_send(PROC_PARENT, IMSG_HELLO, -1, data);
 }
 
 static void
@@ -69,7 +69,7 @@ parent_readreply(int type, int fd, struct ipcmsg *data)
 void
 frontend_launch(void)
 {
-	myproc_listen(PROC_ROOT, child_msgreply);
+	myproc_listen(PROC_PARENT, child_msgreply);
 	myproc_listen(PROC_ENGINE, nothing);
 
 	event_dispatch();
@@ -78,7 +78,7 @@ frontend_launch(void)
 void
 engine_launch(void)
 {
-	myproc_listen(PROC_ROOT, child_msgreply);
+	myproc_listen(PROC_PARENT, child_msgreply);
 	myproc_listen(PROC_FRONTEND, nothing);
 
 	event_dispatch();
@@ -90,7 +90,7 @@ main()
 	struct proc	*p, *f, *e;	
 	struct ipcmsg	*ping;
 
-	p = proc_new(PROC_ROOT);
+	p = proc_new(PROC_PARENT);
 	if (p == NULL) err(1, "proc_new -> parent process");
 
 	f = proc_new(PROC_FRONTEND);

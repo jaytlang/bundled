@@ -3,6 +3,7 @@
 #include <err.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 #include "imaged.h"
@@ -19,6 +20,8 @@ main()
 {
 	struct netmsg 	*uuts[NETOP_MAX + 1];
 	uint8_t		 i, iters = 0;
+
+	bzero(uuts, (NETOP_MAX + 1) * sizeof(struct netmsg *));
 
 dotest:
 	for (i = 0; i <= NETOP_MAX; i++) {
