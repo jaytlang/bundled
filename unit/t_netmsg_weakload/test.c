@@ -3,10 +3,11 @@
 #include <endian.h>
 #include <err.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define NETMSG_WARN(M, S) warnx(S ": %s", netmsg_error(M))
 
@@ -20,8 +21,10 @@ int
 main()
 {
 	struct netmsg	*uut = NULL, *weakuut = NULL;
-	char		*changedlabel;
+	char		*changedlabel, *loadbuffer;
 	int		 unrecoverable, status = -1;
+
+	config_parse(NULL);
 
 	uut = netmsg_new(NETOP_WRITE);
 	if (uut == NULL) err(1, "netmsg_new");
@@ -41,9 +44,13 @@ main()
 		goto end;
 	}
 
-	/* in all probability */
-	weakuut = netmsg_loadweakly(CHROOT MESSAGES "/0");
+	if (asprintf(&loadbuffer, "%s/0", MESSAGES) < 0)
+		err(1, "asprintf filename to load");
+
+	weakuut = netmsg_loadweakly(loadbuffer);
 	if (weakuut == NULL) err(1, "netmsg_loadweakly");
+
+	free(loadbuffer);
 
 	if (!netmsg_isvalid(weakuut, &unrecoverable)) {
 		NETMSG_WARN(weakuut, "weak netmsg is not valid");

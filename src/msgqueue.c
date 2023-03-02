@@ -15,7 +15,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 struct queuedmsg {
 	struct netmsg			*msg;

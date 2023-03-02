@@ -1,4 +1,4 @@
-/* imaged network rpc receipt system
+/* bundled network rpc receipt system
  * (c) jay lang 2023
  */
 
@@ -16,7 +16,7 @@
 #include <strings.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 /* disk file metadata */
 
@@ -82,7 +82,7 @@ msgfile_reservepath(void)
 		free(newfile);
 	}
 
-	asprintf(&newpath, "%s/%llu", CHROOT MESSAGES, newid);
+	asprintf(&newpath, "%s/%llu", MESSAGES, newid);
 end:
 	return newpath;
 }
@@ -91,11 +91,16 @@ static void
 msgfile_releasepath(char *oldpath)
 {
 	struct msgfile	*freefile;
+	char		*pattern;
 	uint64_t	 oldid;
 
-	if (sscanf(oldpath, CHROOT MESSAGES "/%llu", &oldid) != 1)
+	if (asprintf(&pattern, "%s/%%llu", MESSAGES) < 0)
+		log_fatal("msgfile_releasepath: asprintf for message path");
+
+	if (sscanf(oldpath, pattern, &oldid) != 1)
 		log_fatalx("msgfile_free: sscanf on %s failed to extract file id");
 
+	free(pattern);
 	free(oldpath);
 
 	freefile = malloc(sizeof(struct msgfile));

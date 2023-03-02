@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static void	 child_msgreply(int, int, struct ipcmsg *);
 static void	 parent_readreply(int, int, struct ipcmsg *);

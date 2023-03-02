@@ -6,7 +6,7 @@
 #include <strings.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define TEST_ITERS 5
 
@@ -21,6 +21,7 @@ main()
 	struct netmsg 	*uuts[NETOP_MAX + 1];
 	uint8_t		 i, iters = 0;
 
+	config_parse(NULL);
 	bzero(uuts, (NETOP_MAX + 1) * sizeof(struct netmsg *));
 
 dotest:

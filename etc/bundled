@@ -1,7 +1,7 @@
 #!/bin/ksh
 # bare-bones tape for rc.d
 
-daemon="/usr/sbin/imaged"
+daemon="/usr/sbin/bundled"
 rc_reload=NO
 
 . /etc/rc.d/rc.subr

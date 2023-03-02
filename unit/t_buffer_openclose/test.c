@@ -2,7 +2,7 @@
 
 #include <err.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 int
 main()

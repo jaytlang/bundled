@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define	PYTHON3	"/usr/local/bin/python3"	
 
@@ -45,6 +45,7 @@ fork_client(void)
 int
 main()
 {
+	config_parse(NULL);
 	event_init();
 	conn_listen(conn_accept);	
 

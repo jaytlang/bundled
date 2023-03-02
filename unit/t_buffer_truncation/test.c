@@ -5,7 +5,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static char	*teststr = "1234567890";
 

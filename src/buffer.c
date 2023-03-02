@@ -1,4 +1,4 @@
-/* imaged network rpc format
+/* bundled network rpc format
  * (c) jay lang 2023
  */
 
@@ -13,7 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 /* buffers */
 

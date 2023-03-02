@@ -1,4 +1,4 @@
-etc/imaged.sec
+etc/bundled.sec
 etc/jaytlang.key
 regress/__pycache__
 *.o

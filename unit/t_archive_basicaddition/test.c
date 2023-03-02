@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static size_t		datasize = 10000;
 static uint32_t		key = 65535;
@@ -32,6 +32,8 @@ main()
 
 	char		*nfdata;
 	size_t		 ndatasize;
+
+	config_parse("bundled.conf");
 
 	a = archive_new(key);
 	if (a == NULL) err(1, "archive_new");

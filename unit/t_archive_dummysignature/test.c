@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define TEST_SIGNATURE	"hello, world, i am jay"
 
@@ -33,6 +33,8 @@ main()
 	char		*afdata, *bfdata, *e;
 
 	char		*newsignature;
+
+	config_parse("bundled.conf");
 
 	a = archive_new(key);
 	if (a == NULL) err(1, "archive_new");

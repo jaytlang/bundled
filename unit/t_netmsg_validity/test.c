@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define NETMSG_ERROR(M, S) errx(1, S ": %s", netmsg_error(M))
 
@@ -23,6 +23,8 @@ main()
 	char		*dataptr;
 	uint64_t	 lengthvalue, belengthvalue;
 	int		 unrecoverable;
+
+	config_parse(NULL);
 
 	uut = netmsg_new(NETOP_WRITE);
 	if (uut == NULL) err(1, "netmsg_new failed");

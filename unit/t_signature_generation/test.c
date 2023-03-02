@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static char	*testcontent = "hithere";
 static size_t	 testcontentsize = 7;
@@ -18,6 +18,8 @@ main()
 {
 	struct archive	*a;
 	char		*signature, *signaturecopy;
+
+	config_parse("bundled.conf");
 
 	a = archive_new(testkey);
 	if (a == NULL) err(1, "archive_new");

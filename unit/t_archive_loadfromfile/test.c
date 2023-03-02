@@ -2,9 +2,10 @@
 
 #include <err.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static size_t		datasize = 10000;
 static uint32_t		key = 65535;
@@ -28,10 +29,12 @@ int
 main()
 {
 	struct archive	*a, *wa;
-	char		*fdata, *e;
+	char		*toload, *fdata, *e;
 
 	char		*nfdata;
 	size_t		 ndatasize;
+
+	config_parse("bundled.conf");
 
 	a = archive_new(key);
 	if (a == NULL) err(1, "archive_new");
@@ -62,11 +65,16 @@ main()
 		errx(1, "archive_isvalid: %s", e);
 	}
 
-	wa = archive_fromfile(key + 1, ARCHIVES "/65535.bundle");
+	if (asprintf(&toload, "%s/65535.bundle", ARCHIVES) < 0)
+		err(1, "asprintf file path to load");
+
+	wa = archive_fromfile(key + 1, toload);
 	if (wa == NULL) {
 		archive_teardown(a);
 		err(1, "archive_loadfromfile");
 	}
+
+	free(toload);
 
 	nfdata = archive_loadfile(wa, "testdir/testfile", &ndatasize);
 	if (nfdata == NULL) {

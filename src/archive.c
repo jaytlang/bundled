@@ -1,4 +1,4 @@
-/* imaged archive format
+/* bundled archive format
  * (c) jay lang, 2023ish
  */
 
@@ -19,7 +19,7 @@
 #include <unistd.h>
 #include <zlib.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 struct archivefile {
 	char			*name;
@@ -144,8 +144,13 @@ static char *
 archive_keytopath(uint32_t key)
 {
 	char	*out;
+	size_t	 offset;
 
-	if (asprintf(&out, "%s/%u.bundle", ARCHIVES, key) < 0)
+	/* XXX: no chroot is a special case */
+	offset = strlen(CHROOT);
+	if (offset == 1) offset = 0;
+
+	if (asprintf(&out, "%s/%u.bundle", ARCHIVES + offset, key) < 0)
 		log_fatal("archive_keytopath: asprintf path failed");
 
 	return out;
@@ -225,8 +230,6 @@ archive_seekpastsignature(struct archive *a)
 		"end of archive to check whether content exists past signature");
 
 	if (endoffset < offset) {
-		log_writex(LOGTYPE_DEBUG, "archive_seekpastsignature: tried to seek "
-			"past signature, but can't, because the archive is too short");
 		errno = EBADMSG;
 		goto end;
 	}
@@ -434,6 +437,7 @@ archive_new(uint32_t key)
 			"thing. i give up");
 
 	newpath = archive_keytopath(key);
+	log_writex(LOGTYPE_DEBUG, "opening %s", newpath);
 	newfd = open(newpath, flags, mode);
 	if (newfd < 0)
 		log_fatal("archive_new: open");
@@ -586,15 +590,15 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 	int		 	 zstatus, status = -1;
 
 	if (datasize > MAXFILESIZE) {
-		archive_recorderror(a, "adding the file %s to your archive failed, because "
+		archive_recorderror(a, "adding a file to your archive failed, because "
 			"it is too large. your file is %lu bytes, but the maximum allowed "
-			"is %lu bytes", MAXFILESIZE);
+			"is %lu bytes", datasize, MAXFILESIZE);
 		goto end;
 
 	} else if (strlen(fname) > MAXNAMESIZE) {
-		archive_recorderror(a, "adding the file %s to your archive failed, because "
+		archive_recorderror(a, "adding a file to your archive failed, because "
 			"its name is too large. the upper limit on name length is %lu, and you "
-			"hit %lu bytes.", fname, MAXNAMESIZE, strlen(fname));
+			"hit %lu bytes.", MAXNAMESIZE, strlen(fname));
 		goto end;
 
 	} else if (strlen(fname) == 0) {
@@ -606,9 +610,8 @@ archive_addfile(struct archive *a, char *fname, char *data, size_t datasize)
 
 
 	if (archive_hasfile(a, fname)) {
-		archive_recorderror(a, "you seem to have tried to add the same file (%s) twice to "
-			"the archive. some symbolic link stuff is happening? or i have a bug",
-			fname);
+		archive_recorderror(a, "you seem to have tried to add the same file twice to "
+			"the archive. some symbolic link stuff is happening? or i have a bug");
 		goto end;
 	}
 
@@ -707,14 +710,14 @@ archive_loadfile(struct archive *a, char *fname, size_t *datasizeout)
 	found = RB_FIND(archivecache, &a->cachedfiles, &dummy);
 
 	if (found == NULL) {
-		archive_recorderror(a, "the file you're looking for ('%s') is not "
-			"present in this archive", fname);
+		archive_recorderror(a, "the file you're looking for is not "
+			"present in this archive");
 		goto end;
 	}
 
 	if (lseek(a->archivefd, found->offset, SEEK_SET) < 0)
 		log_fatal("archive_loadfile: can't seek underlying archive storage "
-			"to where the target file '%s' should be", fname);
+			"to where the target file should be");
 
 	if (archive_readfileinfo(a, NULL, NULL, &rawdatasize, &compressedsize) < 0)
 		log_fatal("archive_loadfile: not able to pull file metadata off of "

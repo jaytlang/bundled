@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static char	*teststr = "hello, interprocess communication";
 static uint32_t	 testkey = 5536;

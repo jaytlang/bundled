@@ -9,7 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static void	 catchsigint(int, short, void *);
 static void	 firesigint(int, int, struct ipcmsg *);

@@ -3,7 +3,7 @@ from timeout import *
 
 from enum import IntEnum
 
-# these are in imaged.h
+# these are in bundled.h
 class MessageOp(IntEnum):
 	SIGN = 1
 	WRITE = 2

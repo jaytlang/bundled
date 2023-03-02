@@ -1,4 +1,4 @@
-/* imaged connection management
+/* bundled connection management
  * (c) jay lang, 2023
  */
 
@@ -18,7 +18,7 @@
 #include <tls.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define CONN_LISTENBACKLOG	128
 #define CONN_MTU		1500
@@ -91,17 +91,17 @@ globalcontext_init(void)
 
 	if (tls_config_set_ca_path(globalcfg, CONN_CA_PATH) < 0) {
 		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't set ca path to " CONN_CA_PATH);
+		log_fatalx("globalcontext_init: can't set ca path to %s", CONN_CA_PATH);
 	}
 
 	if (tls_config_set_cert_file(globalcfg, CONN_CERT) < 0) {
 		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't set cert file to " CONN_CERT);
+		log_fatalx("globalcontext_init: can't set cert file to %s", CONN_CERT);
 	}
 
 	if ((key = tls_load_file(CONN_KEY, &keysize, NULL)) == NULL) {
 		tls_config_free(globalcfg);
-		log_fatalx("globalcontext_init: can't load keyfile " CONN_KEY);
+		log_fatalx("globalcontext_init: can't load keyfile %s", CONN_KEY);
 	}
 
 	if (tls_config_set_key_mem(globalcfg, key, keysize) < 0) {

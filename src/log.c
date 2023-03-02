@@ -1,4 +1,4 @@
-/* imaged logger
+/* bundled logger
  * (c) jay lang 2023
  */
 
@@ -13,7 +13,7 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define LOGTYPE_FATAL	(LOGTYPE_MAX + 1)
 

@@ -1,4 +1,4 @@
-/* imaged.h
+/* bundled.h
  * (c) jay lang, 2023
  * global state, prototypes, definitions
  */
@@ -8,21 +8,49 @@
 
 #include <sys/types.h>
 
-#define USER		"_imaged"
-#define CHROOT		"/var/imaged"
+/* parse.y */
 
-#define MESSAGES	"/messages"
+#define CONFIG_DEFAULTPATH	"/etc/bundled.conf"
 
-/* changing this around for unit tests */
-#ifndef ARCHIVES
-#define ARCHIVES	"/archives"
-#endif /* ARCHIVES */
+struct config {
+	char	*chroot;		/* chroot "/var/bundled" */
+	char	*user;			/* user _bundled */
 
-#define SIGNATURES	"/signatures"
+	char	*archive_path;		/* archiver workdir "/var/bundled/archive" */
+	char	*message_path;		/* server workdir  "/var/bundled/messages" */
+	char	*signature_path;	/* notary workdir "/var/bundled/signatures" */
 
-#define MAXNAMESIZE	1024		/* uint64_t */
-#define MAXFILESIZE	10485760	/* uint64_t */
-#define MAXSIGSIZE	177		/* uint16_t */
+	uint16_t	 server_port;		/* server listen on 443 */
+	uint32_t	 server_timeout;	/* server timeout 1 */
+	char		*server_ca_path;	/* server ca "/etc/ssl/authority/serverchain.pem" */
+	char		*server_cert_path;	/* server certificate "/etc/ssl/server.pem" */
+	char		*server_key_path;	/* server private key "/etc/ssl/private/server.key" */
+
+	char		*signature_privkey;	/* notary private key "/etc/signify/bundled.sec */
+	char		*signature_pubkey;	/* notary public key "/etc/signify/bundled/pub */
+
+	uint64_t	 archive_maxnamesize;		/* archive max name size 1024 */
+	uint64_t	 archive_maxfilesize;		/* archive max file size 1048576 */
+	uint64_t	 archive_maxsignaturesize;	/* archive max signature size 177 */
+	uint64_t	 archive_maxfiles;		/* archive max files 100 */
+};
+
+void			config_parse(char *fpath);
+extern struct config	config;
+
+#define USER		(config.user)
+#define CHROOT		(config.chroot)
+
+#define MESSAGES	(config.message_path)
+#define ARCHIVES	(config.archive_path)
+#define SIGNATURES	(config.signature_path)
+
+/* these settings are shared across both frontend and engine,
+ * so i figured i'd place them here
+ */
+#define MAXNAMESIZE	(config.archive_maxnamesize)
+#define MAXFILESIZE	(config.archive_maxfilesize)
+#define MAXSIGSIZE	(config.archive_maxsignaturesize)
 
 #define	ERRSTRSIZE	2048
 #define BLOCKSIZE	1048576
@@ -144,6 +172,8 @@ int		 netmsg_isvalid(struct netmsg *, int *);
 
 #define IMSG_MAX                14
 
+#define FRONTEND_TIMEOUT	(config.server_timeout)
+
 struct proc;
 
 struct proc	*proc_new(int);
@@ -159,6 +189,7 @@ void    	 myproc_listen(int, void (*cb)(int, int, struct ipcmsg *));
 void    	 myproc_stoplisten(int);
 int		 myproc_ischrooted(void);
 
+
 void		 frontend_launch(void);
 __dead void	 frontend_signal(int, short, void *);
 
@@ -167,11 +198,11 @@ __dead void	 engine_signal(int, short, void *);
 
 /* conn.c */
 
-#define CONN_PORT	443
+#define CONN_PORT	(config.server_port)
 
-#define CONN_CA_PATH	"/etc/ssl/authority"
-#define CONN_CERT	"/etc/ssl/server.pem"
-#define CONN_KEY	"/etc/ssl/private/server.key"
+#define CONN_CA_PATH	(config.server_ca_path)
+#define CONN_CERT	(config.server_cert_path)
+#define CONN_KEY	(config.server_key_path)
 
 struct conn;
 
@@ -217,7 +248,7 @@ nothing(int a, int b, struct ipcmsg *c)
 
 /* archive.c */
 
-#define ARCHIVE_MAXFILES	100
+#define ARCHIVE_MAXFILES	(config.archive_maxfiles)
 
 struct archive;
 
@@ -245,11 +276,8 @@ char		*archive_getpath(struct archive *);
 
 #define CRYPTO_SIGNIFY		"/usr/bin/signify"
 
-#define CRYPTO_PUBKEY		"/etc/signify/imaged.pub"
-#define CRYPTO_SECKEY		"/etc/signify/imaged.sec"
-
-#define CRYPTO_SIGNATUREIN	CHROOT "/signatures/crc32.bin"
-#define CRYPTO_SIGNATUREOUT	CHROOT "/signatures/crc32.sig"
+#define CRYPTO_PUBKEY		(config.signature_pubkey)
+#define CRYPTO_SECKEY		(config.signature_privkey)
 
 char		*crypto_takesignature(struct archive *);
 int		 crypto_verifysignature(struct archive *);

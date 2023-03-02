@@ -9,7 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define IMSG_P2C	0
 #define IMSG_C2P	1
@@ -91,13 +91,13 @@ main()
 	if (p == NULL) err(1, "proc_new -> parent process");
 
 	proc_setchroot(p, "/var/empty");
-	proc_setuser(p, "_imaged");
+	proc_setuser(p, "_bundled");
 
 	f = proc_new(PROC_FRONTEND);
 	if (f == NULL) err(1, "proc_new -> frontend process");
 
 	proc_setchroot(f, "/var/empty");
-	proc_setuser(f, "_imaged");
+	proc_setuser(f, "_bundled");
 
 	e = proc_new(PROC_ENGINE);
 	if (e == NULL) err(1, "proc_new -> engine process");

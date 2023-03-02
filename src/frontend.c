@@ -1,4 +1,4 @@
-/* imaged true frontend
+/* bundled true frontend
  * (c) jay lang, 2022
  */
 
@@ -20,9 +20,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
-#define FRONTEND_TIMEOUT	1
 #define FRONTEND_ADDRESSSIZE	16
 
 struct activeconn {
@@ -488,11 +487,11 @@ frontend_launch(void)
 	if (unveil(CONN_CERT, "r") < 0)
 		log_fatal("unveil %s", CONN_CERT);
 
-	if (unveil(CHROOT MESSAGES, "rwc") < 0)
-		log_fatal("unveil %s", CHROOT MESSAGES);
+	if (unveil(MESSAGES, "rwc") < 0)
+		log_fatal("unveil %s", MESSAGES);
 
-	if (unveil(CHROOT ARCHIVES, "r") < 0)
-		log_fatal("unveil %s", CHROOT ARCHIVES);
+	if (unveil(ARCHIVES, "r") < 0)
+		log_fatal("unveil %s", ARCHIVES);
 
 	if (setresgid(user->pw_gid, user->pw_gid, user->pw_gid) < 0)
 		log_fatal("setresgid");

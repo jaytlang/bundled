@@ -1,4 +1,4 @@
-/* imaged
+/* bundled
  * (c) jay lang, 2022
  */
 
@@ -13,7 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 __dead static void	parent_signal(int, short, void *);
 __dead static void	usage(void);
@@ -24,8 +24,10 @@ static void		parent_replytoengine(int, uint32_t, char *);
 static void		proc_getmsg(int, int, struct ipcmsg *);
 
 
-int	debug = 0;
-int	verbose = 0;
+static char	*configfile = NULL;
+int		 dry = 0;
+int		 debug = 0;
+int		 verbose = 0;
 
 __dead static void
 parent_signal(int signal, short event, void *arg)
@@ -40,7 +42,7 @@ parent_signal(int signal, short event, void *arg)
 __dead static void
 usage(void)
 {
-	fprintf(stderr, "usage: %s [-dhv]\n", __progname);
+	fprintf(stderr, "usage: %s [-dhnv] [-f configfile]\n", __progname);
 	exit(1);
 }
 
@@ -129,14 +131,21 @@ main(int argc, char *argv[])
 	struct proc	*parent, *frontend, *engine;
 	int		 ch;	
 
-	while ((ch = getopt(argc, argv, "dhv")) != -1) {
+	while ((ch = getopt(argc, argv, "df:hnv")) != -1) {
 		switch (ch) {
 		case 'd':
 			debug = 1;
 			break;
+		case 'f':
+			configfile = optarg;
+			break;
+		case 'n':
+			dry = 1;
+			break;
 		case 'v':
 			verbose = 1;
 			break;
+
 		case 'h':
 		default:
 			usage();
@@ -149,9 +158,15 @@ main(int argc, char *argv[])
 	if (argc > 0) usage();
 	else if (geteuid() != 0) errx(1, "need root privileges");
 
-	empty_directory(CHROOT ARCHIVES);
-	empty_directory(CHROOT SIGNATURES);
-	empty_directory(CHROOT MESSAGES);
+	if (configfile == NULL && access(CONFIG_DEFAULTPATH, R_OK) == 0)
+		configfile = CONFIG_DEFAULTPATH;
+
+	config_parse(configfile);
+	if (dry) errx(0, "configuration OK");
+		
+	empty_directory(ARCHIVES);
+	empty_directory(SIGNATURES);
+	empty_directory(MESSAGES);
 
 	parent = proc_new(PROC_PARENT);
 	if (parent == NULL) err(1, "proc_new -> parent process");
@@ -188,11 +203,11 @@ main(int argc, char *argv[])
 
 	log_writex(LOGTYPE_MSG, "startup");
 
-	if (unveil(CHROOT SIGNATURES, "rwc") < 0)
-		log_fatal("unveil " CHROOT SIGNATURES);
+	if (unveil(SIGNATURES, "rwc") < 0)
+		log_fatal("unveil %s", SIGNATURES);
 
-	if (unveil(CHROOT ARCHIVES, "r") < 0)
-		log_fatal("unveil " CHROOT ARCHIVES);
+	if (unveil(ARCHIVES, "r") < 0)
+		log_fatal("unveil %s", ARCHIVES);
 
 	if (unveil(CRYPTO_SIGNIFY, "x") < 0)
 		log_fatal("unveil " CRYPTO_SIGNIFY);

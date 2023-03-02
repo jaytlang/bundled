@@ -3,7 +3,7 @@
 #include <err.h>
 #include <stdlib.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static uint32_t	key = 65535;
 int		debug = 1, verbose = 1;
@@ -12,6 +12,8 @@ int
 main()
 {
 	struct archive *a;
+
+	config_parse("bundled.conf");
 
 	a = archive_new(key);
 	if (a == NULL) err(1, "archive_new");

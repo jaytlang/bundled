@@ -15,7 +15,7 @@
 #include <strings.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define SOCKETPAIR_FLAGS	(SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC)
 
@@ -221,7 +221,7 @@ proc_startall(struct proc *parentproc, struct proc *frontendproc, struct proc *e
 	free(marshalledmsg);
 	ipcmsg_teardown(fdtransfermsg);
 
-	proc_poststartsetup("imaged parent");
+	proc_poststartsetup("bundled parent");
 }
 
 
@@ -258,8 +258,8 @@ proc_childstart(int parentfd, void (*launch)(void))
 			"setting up cross talk with other child");
 
 	proc_poststartsetup((p->mytype == PROC_FRONTEND) ?
-		"imaged frontend" :
-		"imaged engine");
+		"bundled frontend" :
+		"bundled engine");
 
 	launch();
 

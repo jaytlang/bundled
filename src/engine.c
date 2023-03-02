@@ -1,4 +1,4 @@
-/* imaged true engine
+/* bundled true engine
  * (c) jay lang, 2023ish
  */
 
@@ -12,7 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static void	engine_replytofrontend(int, uint32_t, char *);
 static void	engine_requestsignature(uint32_t, char *);
@@ -156,7 +156,7 @@ proc_getmsgfromparent(int type, int fd, struct ipcmsg *msg)
 	if (type != IMSG_SIGNATURE)
 		log_fatalx("unknown message type received from parent: %d", type);
 
-	/* XXX: race. see comment in imaged.c */
+	/* XXX: race. see comment in bundled.c */
 	archive = archive_fromkey(key);
 	if (archive == NULL) goto end;
 
@@ -171,9 +171,9 @@ end:
 void
 engine_launch(void)
 {
-	if (unveil(ARCHIVES, "rwc") < 0)
+	if (unveil(ARCHIVES + strlen(CHROOT), "rwc") < 0)
 		log_fatal("unveil %s", ARCHIVES);
-	else if (unveil(MESSAGES, "r") < 0)
+	else if (unveil(MESSAGES + strlen(CHROOT), "r") < 0)
 		log_fatal("unveil %s", MESSAGES);
 
 	if (pledge("stdio rpath wpath cpath", "") < 0)

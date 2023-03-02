@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 static char	*teststr = "Hello ";
 static char	*teststr2 = "there";

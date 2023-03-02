@@ -1,5 +1,5 @@
 PYTHON!=	which python3 || true
-RCDAEMON=	imaged
+RCDAEMON=	bundled
 FLAGS=		-v
 SUDO=		doas
 

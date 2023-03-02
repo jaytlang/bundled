@@ -3,7 +3,7 @@
 #include <err.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 int
 main()

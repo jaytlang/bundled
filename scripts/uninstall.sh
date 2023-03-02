@@ -5,17 +5,17 @@
 
 set -x
 
-doas rcctl stop imaged
-doas rcctl disable imaged
-doas rm -f /etc/rc.d/imaged
+doas rcctl stop bundled
+doas rcctl disable bundled
+doas rm -f /etc/rc.d/bundled
 
-yes | doas rmuser _imaged
-doas rm -rf /var/imaged
-doas rm -f /usr/sbin/imaged
+yes | doas rmuser _bundled
+doas rm -rf /var/bundled
+doas rm -f /usr/sbin/bundled
 
 doas rm -f /etc/ssl/authority/mitcca.pem
 doas rm -f /etc/ssl/jaytlang.pem
 doas rm -f /etc/ssl/private/jaytlang.key
-doas rm -f /etc/signify/imaged.*
+doas rm -f /etc/signify/bundled.*
 
 doas sh scripts/rehash.sh /etc/ssl/authority

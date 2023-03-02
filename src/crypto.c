@@ -1,4 +1,4 @@
-/* imaged archive authenticity verification
+/* bundled archive authenticity verification
  * (c) jay lang, 2023
  */
 
@@ -14,7 +14,12 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
+
+#define INPUT_FNAME		"crc32.bin"
+#define OUTPUT_FNAME	"crc32.sig"
+
+static char	*signatureinpath = NULL, *signatureoutpath = NULL;
 
 static void	 crc32_write(char *, uint32_t);
 static void	 crc32_teardown(char *);
@@ -177,13 +182,20 @@ crypto_takesignature(struct archive *a)
 	char		*signature;
 	uint32_t	 crc32 = archive_getcrc32(a);
 
-	crc32_write(CRYPTO_SIGNATUREIN, crc32);
-	signify_sign(CRYPTO_SIGNATUREIN, CRYPTO_SIGNATUREOUT);
+	if (signatureinpath == NULL) {
+		if (asprintf(&signatureinpath, "%s/%s", SIGNATURES, INPUT_FNAME) < 0)
+			log_fatal("asprintf signature input filepath");
+		if (asprintf(&signatureoutpath, "%s/%s", SIGNATURES, OUTPUT_FNAME) < 0)
+			log_fatal("asprintf signature output filepath");
+	}
 
-	signature = signature_read(CRYPTO_SIGNATUREOUT);
+	crc32_write(signatureinpath, crc32);
+	signify_sign(signatureinpath, signatureoutpath);
 
-	crc32_teardown(CRYPTO_SIGNATUREIN);
-	signature_teardown(CRYPTO_SIGNATUREOUT);
+	signature = signature_read(signatureoutpath);
+
+	crc32_teardown(signatureinpath);
+	signature_teardown(signatureoutpath);
 
 	return signature;
 }
@@ -195,16 +207,23 @@ crypto_verifysignature(struct archive *a)
 	uint32_t	 crc32 = archive_getcrc32(a);
 	int		 status = -1;
 
+	if (signatureinpath == NULL) {
+		if (asprintf(&signatureinpath, "%s/%s", SIGNATURES, INPUT_FNAME) < 0)
+			log_fatal("asprintf signature input filepath");
+		if (asprintf(&signatureoutpath, "%s/%s", SIGNATURES, OUTPUT_FNAME) < 0)
+			log_fatal("asprintf signature output filepath");
+	}
+
 	if (strnlen(signature, MAXSIGSIZE) == 0)
 		goto end;
 
-	crc32_write(CRYPTO_SIGNATUREIN, crc32);
-	signature_write(signature, CRYPTO_SIGNATUREOUT);
+	crc32_write(signatureinpath, crc32);
+	signature_write(signature, signatureoutpath);
 
-	status = signify_verify(CRYPTO_SIGNATUREIN, CRYPTO_SIGNATUREOUT);
+	status = signify_verify(signatureinpath, signatureoutpath);
 
-	crc32_teardown(CRYPTO_SIGNATUREIN);
-	signature_teardown(CRYPTO_SIGNATUREOUT);
+	crc32_teardown(signatureinpath);
+	signature_teardown(signatureoutpath);
 	
 end:
 	free(signature);

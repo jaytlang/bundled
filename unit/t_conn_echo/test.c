@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 #define	PYTHON3	"/usr/local/bin/python3"	
 
@@ -101,6 +101,7 @@ main()
 {
 	struct timeval	tv;
 
+	config_parse(NULL);
 	event_init();
 	conn_listen(conn_accept);	
 

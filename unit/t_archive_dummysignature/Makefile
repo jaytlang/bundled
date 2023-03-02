@@ -1,4 +1,7 @@
-SRCS+=		${SRCDIR}/archive.c ${SRCDIR}/log.c test.c
-COPTS+=		-DARCHIVES=\"/var/imaged/archives\"
+SRCS+=	${SRCDIR}/archive.c	\
+	${SRCDIR}/log.c		\
+	${SRCDIR}/scan.l 	\
+	${SRCDIR}/parse.y	\
+	test.c
 
 .include <bsd.prog.mk>

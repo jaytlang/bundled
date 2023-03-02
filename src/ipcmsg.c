@@ -1,4 +1,4 @@
-/* imaged ipc message format
+/* bundled ipc message format
  * (c) jay lang 2023
  */
 
@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "imaged.h"
+#include "bundled.h"
 
 struct ipcmsg {
 	uint32_t	key;
