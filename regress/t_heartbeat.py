@@ -10,7 +10,7 @@ heartbeat_counter = 0
 wire_bytes = bytes()
 
 while heartbeat_counter < 5:
-	to = Timeout(2)
+	to = Timeout(3)
 	wire_bytes += conn.read_bytes()
 	to.cancel()
 

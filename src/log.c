@@ -25,6 +25,8 @@ _log_vwork(int prio, int olderrno, const char *fmt, va_list ap)
 	char	*nfmt;
 	int	 realprio;
 
+	if (prio == LOGTYPE_DEBUG && !verbose) return;
+
 	switch (prio) {
 	case LOGTYPE_MSG:
 	case LOGTYPE_DEBUG:
@@ -40,8 +42,6 @@ _log_vwork(int prio, int olderrno, const char *fmt, va_list ap)
 		log_fatalx("unknown logtype %d passed to log_write", prio);
 		/* never reached */
 	}
-
-	if (realprio == LOG_DEBUG && !verbose) return;
 
 	if (debug) {
 		if (olderrno == 0) vwarnx(fmt, ap);

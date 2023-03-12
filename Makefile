@@ -20,6 +20,8 @@ ARCHIVES=	${CHROOT}/archives
 SIGNATURES=	${CHROOT}/signatures
 MESSAGES=	${CHROOT}/messages
 
+CONFIG=		bundled.conf
+
 SERVERSEC=	/etc/ssl/private/server.key
 SERVERCA=	/etc/ssl/authority/serverchain.pem
 SERVERPUB=	/etc/ssl/server.pem
@@ -94,7 +96,8 @@ afterinstall:
 	${INSTALL} -o root -g wheel -m 444 ${CERT} ${DESTDIR}/etc/ssl;		\
 	${INSTALL} -o root -g wheel -m 400 ${KEY} ${DESTDIR}/etc/ssl/private;	\
 	${INSTALL} -o root -g _bundled -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
-	${INSTALL} -o root -g _bundled -m 640 ${SSEC} ${DESTDIR}/etc/signify
+	${INSTALL} -o root -g _bundled -m 640 ${SSEC} ${DESTDIR}/etc/signify;	\
+	${INSTALL} -o root -g wheel -m 644 ${CONFIG} ${DESTDIR}/etc
 	sh scripts/rehash.sh /etc/ssl/authority
 
 .PHONY: uninstall reinstall
