@@ -159,6 +159,7 @@ proc_poststartsetup(char *ident)
 		case SIGEV_HUP: signalcode = SIGHUP; break;
 		case SIGEV_INT: signalcode = SIGINT; break;
 		case SIGEV_TERM: signalcode = SIGTERM; break;
+		case SIGEV_PIPE: signalcode = SIGPIPE; break;
 		}
 
 		if (p->sigcbs[i] != NULL) {

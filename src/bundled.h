@@ -150,7 +150,8 @@ int		 netmsg_isvalid(struct netmsg *, int *);
 #define SIGEV_HUP       0
 #define SIGEV_INT       1
 #define SIGEV_TERM      2
-#define SIGEV_MAX       3
+#define SIGEV_PIPE	3
+#define SIGEV_MAX       4
 
 #define IMSG_HELLO              0
 #define IMSG_INITFD             1

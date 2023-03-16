@@ -17,5 +17,6 @@ doas rm -f /etc/ssl/authority/mitcca.pem
 doas rm -f /etc/ssl/jaytlang.pem
 doas rm -f /etc/ssl/private/jaytlang.key
 doas rm -f /etc/signify/bundled.*
+doas rm -f /etc/bundled.conf
 
 doas sh scripts/rehash.sh /etc/ssl/authority

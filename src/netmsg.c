@@ -329,9 +329,9 @@ netmsg_getclaimedlabelsize(struct netmsg *m, uint64_t *out)
 
 	bytesread = m->readstorage(m->descriptor, out, sizeof(uint64_t));
 
-	if (bytesread < 0)
+	if (bytesread < 0) {
 		log_fatal("netmsg_getclaimedlabelsize: could not read buffer");
-	else if (bytesread < (ssize_t)sizeof(uint64_t)) {
+	} else if (bytesread < (ssize_t)sizeof(uint64_t)) {
 		errno = EINPROGRESS;
 		goto end;
 	}
@@ -371,6 +371,8 @@ netmsg_getclaimeddatasize(struct netmsg *m, uint64_t *out)
 	}
 
 	*out = be64toh(*out);
+
+	log_writex(LOGTYPE_DEBUG, "claimed data size = %llu vs. max = %llu", *out, MAXFILESIZE);
 
 	if (*out > MAXFILESIZE) {
 		errno = ERANGE;

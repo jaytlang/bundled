@@ -130,6 +130,7 @@ proc_getmsgfromfrontend(int type, int fd, struct ipcmsg *msg)
 		break;
 
 	case IMSG_KILLARCHIVE:
+		log_writex(LOGTYPE_DEBUG, "tearing down archive");
 		archive_teardown(archive);
 		break;
 

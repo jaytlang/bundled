@@ -9,6 +9,7 @@
 #include <sys/tree.h>
 
 #include <arpa/inet.h>
+#include <netinet/in.h>
 
 #include <errno.h>
 #include <event.h>
@@ -107,7 +108,7 @@ activeconn_new(struct conn *c)
 
 	if (peer == NULL)
 		log_fatal("activeconn_new: conn_getsockpeer");
-	else if (inet_ntop(AF_INET, peer, out->peer, FRONTEND_ADDRESSSIZE) == NULL)
+	else if (inet_ntop(AF_INET, &peer->sin_addr, out->peer, FRONTEND_ADDRESSSIZE) == NULL)
 		log_fatal("activeconn_new: inet_ntop");
 
 	free(peer);

@@ -410,6 +410,8 @@ conn_listen(void (*cb)(struct conn *))
 void
 conn_teardown(struct conn *c)
 {
+	log_writex(LOGTYPE_DEBUG, "tearing down connection");
+
 	if (c->cb_teardown != NULL)
 		c->cb_teardown(c);
 
