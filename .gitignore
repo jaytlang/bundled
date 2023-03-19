@@ -5,3 +5,4 @@ regress/__pycache__
 *.d
 *.core
 *.so
+src/bundled
