@@ -478,12 +478,10 @@ archive_fromfile(uint32_t key, char *path)
 	char		*loadpath = NULL;
 	int		 loadfd = -1;
 
-	if (archive_fromkey(key) != NULL) {
+	if (archive_fromkey(key) != NULL)
 		log_fatalx("archive_fromfile: tried to create two archives w/ the same key, "
 			"which honestly defeats the purpose of the whole key abstraction "
 			"thing. i give up");
-		goto end;
-	}
 
 	loadpath = strdup(path);
 	if (loadpath == NULL)
