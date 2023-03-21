@@ -67,6 +67,9 @@ signify_sign(char *message, char *signature)
 		log_fatal("signify_sign: fork");
 
 	else if (pid == 0) {
+		freopen("/dev/null", "a", stdout);
+		freopen("/dev/null", "a", stderr);
+
 		execl(CRYPTO_SIGNIFY, CRYPTO_SIGNIFY, "-S", "-n",
 			"-x", signature,
 			"-s", CRYPTO_SECKEY,
