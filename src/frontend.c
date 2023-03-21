@@ -153,6 +153,7 @@ activeconn_bykey(uint32_t key)
 	dummy.backendkey = key;
 	out = RB_FIND(activekeytree, &connsbykey, &dummy);
 
+	if (out == NULL) errno = EINVAL;
 	return out;
 }
 
