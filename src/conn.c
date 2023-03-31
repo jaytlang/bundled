@@ -327,16 +327,20 @@ conn_doreceive(int fd, short event, void *arg)
 				 */
 				c->cb_receive(c, c->incoming_message);
 
-				netmsg_teardown(c->incoming_message);
-				c->incoming_message = NULL;
+				if (RB_FIND(conntree, &allcons, c) != NULL) {
+					netmsg_teardown(c->incoming_message);
+					c->incoming_message = NULL;
+				}
 			}
 
 		} else {
 			netmsg_clearerror(c->incoming_message);
 			c->cb_receive(c, c->incoming_message);
 
-			netmsg_teardown(c->incoming_message);
-			c->incoming_message = NULL;
+			if (RB_FIND(conntree, &allcons, c) != NULL) {
+				netmsg_teardown(c->incoming_message);
+				c->incoming_message = NULL;
+			}
 		}
 	}
 
