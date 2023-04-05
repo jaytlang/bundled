@@ -358,7 +358,6 @@ proc_dorecv(int fd, short event, void *arg)
 
 		if (data == NULL) log_fatal("ipcmsg_unmarshal");
 
-		log_writex(LOGTYPE_DEBUG, "message (type %d) %d -> %d", imsg.hdr.type, source, p->mytype);
 		p->readcbs[source]((int)imsg.hdr.type, imsg.fd, data);
 
 		ipcmsg_teardown(data);
