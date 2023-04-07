@@ -9,7 +9,7 @@
 #define yyerrok (yyerrflag=0)
 #define YYRECOVERING() (yyerrflag!=0)
 #define YYPREFIX "yy"
-#line 5 "../../src/parse.y"
+#line 5 "parse.y"
 #include <sys/types.h>
 
 #include <err.h>
@@ -43,7 +43,7 @@ static void	 config_setdefaults(void);
 
 extern int yylex(void);
 extern int yyerror(const char *, ...);
-#line 50 "../../src/parse.y"
+#line 50 "parse.y"
 #ifndef YYSTYPE_DEFINED
 #define YYSTYPE_DEFINED
 typedef union {
@@ -51,7 +51,7 @@ typedef union {
 	uint64_t	 uint;	
 } YYSTYPE;
 #endif /* YYSTYPE_DEFINED */
-#line 55 "../../src/parse.c"
+#line 55 "parse.c"
 #define TOK_CHROOT 257
 #define TOK_USER 258
 #define TOK_ARCHIVER 259
@@ -256,7 +256,7 @@ short *yysslim;
 YYSTYPE *yyvs;
 unsigned int yystacksize;
 int yyparse(void);
-#line 151 "../../src/parse.y"
+#line 151 "parse.y"
 
 static char *
 absolute_to_canonical(char *absolute)
@@ -350,7 +350,7 @@ config_setdefaults(void)
 	RESTORE_DEFAULT_STR(signature_pubkey, "/etc/signify/bundled.pub");
 
 	RESTORE_DEFAULT(archive_maxnamesize, 1024);
-	RESTORE_DEFAULT(archive_maxfilesize, 1048576);
+	RESTORE_DEFAULT(archive_maxfilesize, 10485760);
 	RESTORE_DEFAULT(archive_maxsignaturesize, 177);
 	RESTORE_DEFAULT(archive_maxfiles, 100);
 }
@@ -463,7 +463,7 @@ config_parse(char *fpath)
 		errx(1, "%llu errors detected in configuration", errors);
 	}
 }
-#line 459 "../../src/parse.c"
+#line 459 "parse.c"
 /* allocate initial stack or double stack size, up to YYMAXDEPTH */
 static int yygrowstack(void)
 {
@@ -656,11 +656,11 @@ yyreduce:
     switch (yyn)
     {
 case 4:
-#line 63 "../../src/parse.y"
+#line 63 "parse.y"
 { ++errors; yyerrok; }
 break;
 case 9:
-#line 70 "../../src/parse.y"
+#line 70 "parse.y"
 {
 		char *absolutepath;
 
@@ -674,27 +674,27 @@ case 9:
 	}
 break;
 case 10:
-#line 82 "../../src/parse.y"
+#line 82 "parse.y"
 { config.archive_maxnamesize = yyvsp[0].uint; }
 break;
 case 11:
-#line 83 "../../src/parse.y"
+#line 83 "parse.y"
 { config.archive_maxfilesize = yyvsp[0].uint; }
 break;
 case 12:
-#line 84 "../../src/parse.y"
+#line 84 "parse.y"
 { config.archive_maxsignaturesize = yyvsp[0].uint; }
 break;
 case 13:
-#line 85 "../../src/parse.y"
+#line 85 "parse.y"
 { config.archive_maxfiles = yyvsp[0].uint; }
 break;
 case 14:
-#line 88 "../../src/parse.y"
+#line 88 "parse.y"
 { config.chroot = absolute_to_canonical(yyvsp[0].str); }
 break;
 case 15:
-#line 91 "../../src/parse.y"
+#line 91 "parse.y"
 {
 		char *absolutepath;
 
@@ -709,15 +709,15 @@ case 15:
 	}
 break;
 case 16:
-#line 104 "../../src/parse.y"
+#line 104 "parse.y"
 { config.signature_privkey = absolute_to_canonical(yyvsp[0].str); }
 break;
 case 17:
-#line 105 "../../src/parse.y"
+#line 105 "parse.y"
 { config.signature_pubkey = absolute_to_canonical(yyvsp[0].str); }
 break;
 case 18:
-#line 108 "../../src/parse.y"
+#line 108 "parse.y"
 {
 		if (yyvsp[0].uint >= UINT16_MAX) {
 			yyerror("requested listen on port number %llu, which "
@@ -729,7 +729,7 @@ case 18:
 	}
 break;
 case 19:
-#line 118 "../../src/parse.y"
+#line 118 "parse.y"
 {
 		char *absolutepath;
 
@@ -743,7 +743,7 @@ case 19:
 	}
 break;
 case 20:
-#line 130 "../../src/parse.y"
+#line 130 "parse.y"
 {
 		if (yyvsp[0].uint >= UINT32_MAX) {
 			yyerror("configured timeout is _unreasonably_ large...");
@@ -757,22 +757,22 @@ case 20:
 	}
 break;
 case 21:
-#line 142 "../../src/parse.y"
+#line 142 "parse.y"
 { config.server_ca_path = absolute_to_canonical(yyvsp[0].str); }
 break;
 case 22:
-#line 143 "../../src/parse.y"
+#line 143 "parse.y"
 { config.server_cert_path = absolute_to_canonical(yyvsp[0].str); }
 break;
 case 23:
-#line 144 "../../src/parse.y"
+#line 144 "parse.y"
 { config.server_key_path = absolute_to_canonical(yyvsp[0].str); }
 break;
 case 24:
-#line 147 "../../src/parse.y"
+#line 147 "parse.y"
 { config.user = yyvsp[0].str; }
 break;
-#line 768 "../../src/parse.c"
+#line 768 "parse.c"
     }
     yyssp -= yym;
     yystate = *yyssp;

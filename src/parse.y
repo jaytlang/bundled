@@ -241,7 +241,7 @@ config_setdefaults(void)
 	RESTORE_DEFAULT_STR(signature_pubkey, "/etc/signify/bundled.pub");
 
 	RESTORE_DEFAULT(archive_maxnamesize, 1024);
-	RESTORE_DEFAULT(archive_maxfilesize, 1048576);
+	RESTORE_DEFAULT(archive_maxfilesize, 10485760);
 	RESTORE_DEFAULT(archive_maxsignaturesize, 177);
 	RESTORE_DEFAULT(archive_maxfiles, 100);
 }
