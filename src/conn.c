@@ -21,7 +21,7 @@
 #include "bundled.h"
 
 #define CONN_LISTENBACKLOG	128
-#define CONN_MTU		1500
+#define CONN_MTU		1048576
 
 struct globalcontext {
 	uint8_t			*tls_key;	
