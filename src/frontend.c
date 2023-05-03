@@ -137,7 +137,7 @@ activeconn_handleteardown(struct conn *c)
 	ac->shouldheartbeat = 0;
 
 	if (ac->pendingmsg != NULL) {
-		log_writex(LOGTYPE_WARN, "tearing down pending message for peer %s", ac->peer);
+		log_writex(LOGTYPE_DEBUG, "tearing down pending message for peer %s", ac->peer);
 		netmsg_teardown(ac->pendingmsg);
 		ac->pendingmsg = NULL;
 	}
@@ -354,11 +354,11 @@ conn_getmsg(struct conn *c, struct netmsg *m)
 	if (m == NULL || strlen(netmsg_error(m)) > 0) {
 
 		if (m == NULL)
-			log_writex(LOGTYPE_WARN,
+			log_writex(LOGTYPE_DEBUG,
 				   "conn_getmsg: peer %s sent unintelligble message",
 				   ac->peer);
 		else
-			log_writex(LOGTYPE_WARN,
+			log_writex(LOGTYPE_DEBUG,
 			   	   "conn_getmsg: peer %s sent bad message: %s",
 			   	   ac->peer,
 			   	   netmsg_error(m));
