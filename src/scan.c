@@ -1,6 +1,6 @@
-#line 2 "../../src/scan.c"
+#line 2 "scan.c"
 
-#line 4 "../../src/scan.c"
+#line 4 "scan.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -552,11 +552,11 @@ int yy_flex_debug = 0;
 #define YY_MORE_ADJ 0
 #define YY_RESTORE_YY_MORE_OFFSET
 char *yytext;
-#line 1 "../../src/scan.l"
+#line 1 "scan.l"
 /* bundled configuration 
  * (c) jay lang, 2023
  */
-#line 6 "../../src/scan.l"
+#line 6 "scan.l"
 #include <sys/types.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -569,7 +569,7 @@ static uint64_t	sizetobytes(char *);
 
 extern YYSTYPE	yylval;
 uint64_t	lineno;
-#line 573 "../../src/scan.c"
+#line 573 "scan.c"
 
 #define INITIAL 0
 
@@ -780,9 +780,9 @@ YY_DECL
 	}
 
 	{
-#line 20 "../../src/scan.l"
+#line 20 "scan.l"
 
-#line 786 "../../src/scan.c"
+#line 786 "scan.c"
 
 	while ( 1 )		/* loops until end-of-file is reached */
 		{
@@ -841,161 +841,161 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 21 "../../src/scan.l"
+#line 21 "scan.l"
 return TOK_CHROOT;
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 22 "../../src/scan.l"
+#line 22 "scan.l"
 return TOK_USER;
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 24 "../../src/scan.l"
+#line 24 "scan.l"
 return TOK_ARCHIVER;
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 25 "../../src/scan.l"
+#line 25 "scan.l"
 return TOK_SERVER;
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 26 "../../src/scan.l"
+#line 26 "scan.l"
 return TOK_NOTARY;
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 27 "../../src/scan.l"
+#line 27 "scan.l"
 return TOK_WORKDIR;
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 29 "../../src/scan.l"
+#line 29 "scan.l"
 return TOK_LISTEN;
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 30 "../../src/scan.l"
+#line 30 "scan.l"
 return TOK_ON;
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 31 "../../src/scan.l"
+#line 31 "scan.l"
 return TOK_TIMEOUT;
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 32 "../../src/scan.l"
+#line 32 "scan.l"
 return TOK_CA;
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 33 "../../src/scan.l"
+#line 33 "scan.l"
 return TOK_CERT;
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 34 "../../src/scan.l"
+#line 34 "scan.l"
 return TOK_PUBLIC;
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 35 "../../src/scan.l"
+#line 35 "scan.l"
 return TOK_PRIVATE;
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 36 "../../src/scan.l"
+#line 36 "scan.l"
 return TOK_KEY;
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 38 "../../src/scan.l"
+#line 38 "scan.l"
 return TOK_INPUT;
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 39 "../../src/scan.l"
+#line 39 "scan.l"
 return TOK_OUTPUT;
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 41 "../../src/scan.l"
+#line 41 "scan.l"
 return TOK_MAX;
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 42 "../../src/scan.l"
+#line 42 "scan.l"
 return TOK_NAME;
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 43 "../../src/scan.l"
+#line 43 "scan.l"
 return TOK_FILE;
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 44 "../../src/scan.l"
+#line 44 "scan.l"
 return TOK_SIGNATURE;
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 45 "../../src/scan.l"
+#line 45 "scan.l"
 return TOK_FILES;
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 46 "../../src/scan.l"
+#line 46 "scan.l"
 return TOK_SIZE;
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 48 "../../src/scan.l"
+#line 48 "scan.l"
 yylval.uint = (uint64_t)strtoull(yytext, NULL, 10); return NUMBER;
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 49 "../../src/scan.l"
+#line 49 "scan.l"
 yylval.uint = sizetobytes(yytext); return NUMBER;
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 50 "../../src/scan.l"
+#line 50 "scan.l"
 yylval.str = strdup(yytext); return USERNAME;
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 51 "../../src/scan.l"
+#line 51 "scan.l"
 yylval.str = strdup(yytext + 1); yylval.str[strlen(yytext) - 2] = '\0'; return PATH;
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 53 "../../src/scan.l"
+#line 53 "scan.l"
 /* dead */
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 54 "../../src/scan.l"
+#line 54 "scan.l"
 /* dead */
 	YY_BREAK
 case 29:
 /* rule 29 can match eol */
 YY_RULE_SETUP
-#line 56 "../../src/scan.l"
+#line 56 "scan.l"
 ++lineno; return '\n';
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 57 "../../src/scan.l"
+#line 57 "scan.l"
 return (int)*yytext;
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 58 "../../src/scan.l"
+#line 58 "scan.l"
 ECHO;
 	YY_BREAK
-#line 999 "../../src/scan.c"
+#line 999 "scan.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -1992,7 +1992,7 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 58 "../../src/scan.l"
+#line 58 "scan.l"
 
 
 
