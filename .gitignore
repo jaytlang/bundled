@@ -1,5 +1,7 @@
 etc/bundled.sec
+etc/bundled.pub
 etc/jaytlang.key
+etc/jaytlang.pem
 regress/__pycache__
 *.o
 *.d
