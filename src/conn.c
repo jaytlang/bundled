@@ -110,7 +110,7 @@ globalcontext_init(void)
 		log_fatalx("globalcontext_init: can't set key memory");
 	}
 
-	tls_config_verify_client(globalcfg);
+/*	tls_config_verify_client(globalcfg); */
 
 	serverctx = tls_server();
 	if (serverctx == NULL)

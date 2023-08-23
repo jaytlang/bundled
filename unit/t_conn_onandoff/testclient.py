@@ -7,9 +7,9 @@ from connection import *
 import ssl
 import time
 
-CA_LIST = ["/etc/ssl/authority/serverchain.pem", "/etc/ssl/authority/mitcca.pem"]
-CLIENT_CERT = "/etc/ssl/jaytlang.pem"
-CLIENT_KEY = "/etc/ssl/private/jaytlang.key"
+CA_LIST = None
+CLIENT_CERT = None
+CLIENT_KEY = None
 
 def open_and_close():
 	newconn = Connection(CA_LIST, CLIENT_CERT, CLIENT_KEY)

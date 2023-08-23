@@ -8,10 +8,6 @@ RCDAEMON=	bundled
 USER=		_bundled
 GECOS=		"Build Image Creation Daemon"
 
-CA=		mitcca.pem
-CERT=		jaytlang.pem
-KEY=		jaytlang.key
-
 SPUB=		bundled.pub
 SSEC=		bundled.sec
 
@@ -92,9 +88,6 @@ afterinstall:
 	cd etc;									\
 	${INSTALL} -o root -g wheel -m 555 ${RCDAEMON} 				\
 		${DESTDIR}/etc/rc.d;						\
-	${INSTALL} -o root -g wheel -m 444 ${CA} ${DESTDIR}/etc/ssl/authority;	\
-	${INSTALL} -o root -g wheel -m 444 ${CERT} ${DESTDIR}/etc/ssl;		\
-	${INSTALL} -o root -g wheel -m 400 ${KEY} ${DESTDIR}/etc/ssl/private;	\
 	${INSTALL} -o root -g _bundled -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
 	${INSTALL} -o root -g _bundled -m 640 ${SSEC} ${DESTDIR}/etc/signify;	\
 	${INSTALL} -o root -g wheel -m 644 ${CONFIG} ${DESTDIR}/etc

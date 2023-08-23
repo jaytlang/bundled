@@ -1,9 +1,9 @@
-client_cert = "../etc/jaytlang.pem"
-client_key = "../etc/jaytlang.key"
-client_ca = "../etc/mitcca.pem"
+client_cert = None
+client_key = None
+client_ca = None
 
-server_ca = "/etc/ssl/authority/serverchain.pem"
-server_hostname = "eecs-digital-53.mit.edu"
+server_ca = None
+server_hostname = "bundle.jtlang.dev"
 server_port = 443
 
 # the below settings must match the running

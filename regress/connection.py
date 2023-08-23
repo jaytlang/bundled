@@ -4,6 +4,7 @@ import ssl
 def _certificates_to_ascii(calist):
 	result = ""
 	for path in calist:
+		if path is None: continue
 		with open(path, 'r') as f:
 			result += f.read() + "\n"
 	return result
@@ -14,7 +15,8 @@ class Connection:
 
 		if self.calist is not None:
 			catext = _certificates_to_ascii(self.calist)
-			self.context.load_verify_locations(cadata=catext)
+			if catext != "": 
+				self.context.load_verify_locations(cadata=catext)
 
 		if self.certfile is not None and self.keyfile is not None:
 			self.context.load_cert_chain(self.certfile, self.keyfile)
