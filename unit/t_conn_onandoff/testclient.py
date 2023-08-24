@@ -14,7 +14,7 @@ CLIENT_KEY = None
 def open_and_close():
 	newconn = Connection(CA_LIST, CLIENT_CERT, CLIENT_KEY)
 	try:
-		newconn.connect("localhost", 443)
+		newconn.connect("fpga3.mit.edu", 443)
 		raise AssertionError("remote connection did not close before handshake")
 	except: 
 		newconn.close()

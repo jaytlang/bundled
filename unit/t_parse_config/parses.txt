@@ -17,7 +17,7 @@ archiver max files 100
 
 server listen on 80
 server timeout 5
-server ca "/etc/ssl/authority"
+server ca "/etc/ssl/cert.pem"
 server certificate "/etc/ssl/server.pem"
 server private key "/etc/ssl/private/server.key"
 

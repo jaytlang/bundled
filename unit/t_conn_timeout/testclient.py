@@ -14,6 +14,6 @@ CLIENT_CERT = None
 CLIENT_KEY = None
 
 nc = Connection(CA_LIST, CLIENT_CERT, CLIENT_KEY)
-nc.connect("bundle.jtlang.dev", 443)	
+nc.connect("fpga3.mit.edu", 443)	
 
 time.sleep(2)

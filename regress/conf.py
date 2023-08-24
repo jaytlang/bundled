@@ -3,7 +3,7 @@ client_key = None
 client_ca = None
 
 server_ca = None
-server_hostname = "bundle.jtlang.dev"
+server_hostname = "fpga3.mit.edu"
 server_port = 443
 
 # the below settings must match the running

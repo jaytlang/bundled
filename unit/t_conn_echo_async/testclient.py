@@ -17,7 +17,7 @@ active = []
 
 for _i in range(5):
 	nc = Connection(CA_LIST, CLIENT_CERT, CLIENT_KEY)
-	nc.connect("bundle.jtlang.dev", 443)	
+	nc.connect("fpga3.mit.edu", 443)	
 	active.append(nc)
 
 for conn in active:

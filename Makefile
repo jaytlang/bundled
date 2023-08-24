@@ -19,12 +19,10 @@ MESSAGES=	${CHROOT}/messages
 CONFIG=		bundled.conf
 
 SERVERSEC=	/etc/ssl/private/server.key
-SERVERCA=	/etc/ssl/authority/serverchain.pem
+SERVERCA=	/etc/ssl/cert.pem
 SERVERPUB=	/etc/ssl/server.pem
 
 # Build configuration ends here
-
-REHASH=		scripts/rehash.sh
 UGOUID=		's/.*\(....\)/\1/'
 
 checkcerts:
@@ -91,7 +89,6 @@ afterinstall:
 	${INSTALL} -o root -g _bundled -m 644 ${SPUB} ${DESTDIR}/etc/signify;	\
 	${INSTALL} -o root -g _bundled -m 640 ${SSEC} ${DESTDIR}/etc/signify;	\
 	${INSTALL} -o root -g wheel -m 644 ${CONFIG} ${DESTDIR}/etc
-	sh scripts/rehash.sh /etc/ssl/authority
 
 .PHONY: uninstall reinstall
 uninstall: checkroot

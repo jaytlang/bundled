@@ -342,7 +342,7 @@ config_setdefaults(void)
 	RESTORE_DEFAULT(server_port, 443);	
 	RESTORE_DEFAULT(server_timeout, 1);
 
-	RESTORE_DEFAULT_STR(server_ca_path, "/etc/ssl/authority");
+	RESTORE_DEFAULT_STR(server_ca_path, "/etc/ssl/cert.pem");
 	RESTORE_DEFAULT_STR(server_cert_path, "/etc/ssl/server.pem");
 	RESTORE_DEFAULT_STR(server_key_path, "/etc/ssl/private/server.key");
 
